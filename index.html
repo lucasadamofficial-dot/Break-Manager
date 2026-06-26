@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Break Management & Reporting</title>
+
+<!-- React + Babel + Tailwind + Chart.js + export libs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          display: ['Space Grotesk', 'Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(100,116,139,.4); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes pulsering { 0%{box-shadow:0 0 0 0 rgba(245,158,11,.45)} 70%{box-shadow:0 0 0 12px rgba(245,158,11,0)} 100%{box-shadow:0 0 0 0 rgba(245,158,11,0)} }
+  .pulse-amber { animation: pulsering 2s infinite; }
+  @keyframes pulseringred { 0%{box-shadow:0 0 0 0 rgba(244,63,94,.5)} 70%{box-shadow:0 0 0 12px rgba(244,63,94,0)} 100%{box-shadow:0 0 0 0 rgba(244,63,94,0)} }
+  .pulse-red { animation: pulseringred 1.4s infinite; }
+  .dot { width:8px;height:8px;border-radius:50%;display:inline-block; }
+  @media print {
+    .no-print { display:none !important; }
+    body { background:#fff !important; }
+  }
+  [type="number"]::-webkit-inner-spin-button { opacity:1; }
+</style>
+</head>
+<body class="bg-slate-100 dark:bg-[#0B1220] text-slate-800 dark:text-slate-100 antialiased">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ============================================================
+   STORAGE CONFIG — choose where data is stored.
+   Set STORAGE_MODE to ONE of:
+     "local"        → this browser only (no setup; clears on cache wipe)
+     "apps_script"  → Google Sheets via Apps Script   (set APPS_SCRIPT_URL)
+     "supabase"     → Supabase Postgres               (set SUPABASE_*)
+     "firebase"     → Firebase Firestore              (set FIREBASE_CONFIG)
+     "jsonbin"      → JSONBin.io cloud JSON           (set JSONBIN_*)
+   Step-by-step setup for every option is in the comment block
+   at the very bottom of this file.
+   ============================================================ */
+const STORAGE_MODE = "apps_script";
+
+/* 1) Google Apps Script (Sheets) — ACTIVE. Deploy the .gs on your sheet,
+      then paste the Web app /exec URL below. Sheet:
+      https://docs.google.com/spreadsheets/d/1gtVboWcy9xGs1vXhDZZVEGGyTqSQCFR8OpKd1Mwg7r8/edit */
+const APPS_SCRIPT_URL = ""; // "https://script.google.com/macros/s/AKfy.../exec"
+
+/* 2) Supabase — table:  app_state ( id text primary key, data jsonb ) */
+const SUPABASE_URL      = ""; // "https://xxxxx.supabase.co"
+const SUPABASE_ANON_KEY = ""; // Project Settings → API → anon public key
+const SUPABASE_TABLE    = "app_state";
+
+/* 3) Firebase — create a Web app + enable Firestore, paste the config */
+const FIREBASE_CONFIG = { apiKey:"", authDomain:"", projectId:"", appId:"" };
+
+/* 4) JSONBin.io — create a private bin, copy its Bin ID + Master Key */
+const JSONBIN_BIN_ID = "";
+const JSONBIN_KEY    = "";
+
+const REFRESH_MS = 30000;
+const STORE_KEY  = "break_mgmt_db_v1";
+const CLOUD_ID   = "main"; // row/doc id used by the cloud stores
+
+/* active mode helpers */
+const MODE       = STORAGE_MODE;
+const isCloud    = () => MODE !== "local";
+const MODE_LABEL = ({ local:"local", apps_script:"Google Sheets", supabase:"Supabase", firebase:"Firebase", jsonbin:"JSONBin" })[MODE] || MODE;
+
+/* ---------------- safe storage (won't crash in sandbox) ------- */
+const safeStore = {
+  get(k){ try { return window.localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { window.localStorage.setItem(k,v); } catch(e){} },
+};
+
+/* ---------------- helpers ------------------------------------ */
+const uid = (p="id") => p + "_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e4);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const pad = (n) => String(n).padStart(2,"0");
+
+function dateStr(d){ const x = new Date(d); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); }
+const todayStr = () => dateStr(new Date());
+
+function fmtClock(secs){
+  secs = Math.max(0, Math.floor(secs));
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+  return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function fmtMins(mins){
+  mins = Math.round(mins||0);
+  if (mins < 60) return mins + "m";
+  const h = Math.floor(mins/60), m = mins%60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+function fmtTime(iso){ if(!iso) return "—"; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+function fmtDay(d){ return new Date(d).toLocaleDateString([], {month:"short", day:"numeric"}); }
+function weekKey(d){
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); // Monday start
+  return dateStr(x);
+}
+function monthKey(d){ const x = new Date(d); return x.getFullYear()+"-"+pad(x.getMonth()+1); }
+
+// minutes attributed to a record (live elapsed if ongoing)
+function recMins(r, now){
+  const start = new Date(r.startTime).getTime();
+  const end = r.endTime ? new Date(r.endTime).getTime() : now;
+  return Math.max(0, (end - start)/60000);
+}
+function isExceeded(r, now){
+  if (!r.maxMinutes) return false;
+  return recMins(r, now) > r.maxMinutes;
+}
+
+/* ---------------- seed data ---------------------------------- */
+const DEFAULT_BREAK_TYPES = [
+  { name:"Tea Break", maxMinutes:15, color:"#10B981" },
+  { name:"Lunch Break", maxMinutes:45, color:"#6366F1" },
+  { name:"Prayer (Namaz)", maxMinutes:20, color:"#22D3EE" },
+  { name:"Phone Call", maxMinutes:10, color:"#F59E0B" },
+  { name:"Washroom", maxMinutes:8, color:"#A78BFA" },
+  { name:"Meeting", maxMinutes:30, color:"#0EA5E9" },
+  { name:"Personal Break", maxMinutes:15, color:"#F472B6" },
+  { name:"Emergency", maxMinutes:30, color:"#F43F5E" },
+  { name:"Other", maxMinutes:15, color:"#94A3B8" },
+].map(b => ({ id: uid("bt"), active:true, ...b }));
+
+function seedEmployees(){
+  return [
+    { id:uid("emp"), empId:"ADMIN", name:"System Admin", department:"Management", designation:"Administrator", teamLead:"", email:"admin@company.com", phone:"", role:"Admin", pin:"1234", status:"Active" },
+    { id:uid("emp"), empId:"LEAD-OPS", name:"Omar Farooq", department:"Operations", designation:"Team Lead", teamLead:"", email:"omar@company.com", phone:"", role:"TeamLead", pin:"1111", status:"Active" },
+    { id:uid("emp"), empId:"LEAD-SUP", name:"Hina Raza", department:"Support", designation:"Team Lead", teamLead:"", email:"hina@company.com", phone:"", role:"TeamLead", pin:"2222", status:"Active" },
+    { id:uid("emp"), empId:"EMP-101", name:"Ayesha Khan", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"ayesha@company.com", phone:"", role:"Employee", pin:"0001", status:"Active" },
+    { id:uid("emp"), empId:"EMP-102", name:"Bilal Ahmed", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"bilal@company.com", phone:"", role:"Employee", pin:"0002", status:"Active" },
+    { id:uid("emp"), empId:"EMP-103", name:"Sana Tariq", department:"Support", designation:"Agent", teamLead:"LEAD-SUP", email:"sana@company.com", phone:"", role:"Employee", pin:"0003", status:"Active" },
+    { id:uid("emp"), empId:"EMP-104", name:"Hamza Sheikh", department:"Support", designation:"Agent", teamLead:"LEAD-SUP", email:"hamza@company.com", phone:"", role:"Employee", pin:"0004", status:"Active" },
+    { id:uid("emp"), empId:"EMP-105", name:"Zara Malik", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"zara@company.com", phone:"", role:"Employee", pin:"0005", status:"Active" },
+  ];
+}
+
+// light demo history so dashboards aren't empty in local mode
+function seedRecords(employees, breakTypes){
+  const recs = [];
+  const emps = employees.filter(e => e.role !== "Admin");
+  const now = Date.now();
+  for (let d=6; d>=0; d--){
+    const day = new Date(now - d*86400000);
+    emps.forEach(e => {
+      const count = 1 + Math.floor(Math.random()*3);
+      for (let i=0;i<count;i++){
+        const bt = breakTypes[Math.floor(Math.random()*breakTypes.length)];
+        const startH = 9 + Math.floor(Math.random()*8);
+        const startM = Math.floor(Math.random()*59);
+        const start = new Date(day); start.setHours(startH, startM, 0, 0);
+        const over = Math.random() < 0.22;
+        const dur = Math.max(2, Math.round(bt.maxMinutes * (over ? (1.1 + Math.random()*0.6) : (0.4 + Math.random()*0.5))));
+        const end = new Date(start.getTime() + dur*60000);
+        recs.push({
+          id: uid("rec"), employeeId:e.empId, employeeName:e.name, department:e.department, teamLead:e.teamLead,
+          breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
+          startTime: start.toISOString(), endTime: end.toISOString(),
+          durationMin: dur, note:"", date: dateStr(start), status:"Returned",
+        });
+      }
+    });
+  }
+  // a couple ongoing breaks today for live view
+  const live = [emps[0], emps[3]].filter(Boolean);
+  live.forEach((e,idx) => {
+    const bt = breakTypes[idx % breakTypes.length];
+    const start = new Date(now - (idx===0? 6: 14)*60000);
+    recs.push({
+      id: uid("rec"), employeeId:e.empId, employeeName:e.name, department:e.department, teamLead:e.teamLead,
+      breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
+      startTime: start.toISOString(), endTime:null, durationMin:null, note:"", date: todayStr(), status:"On Break",
+    });
+  });
+  return recs;
+}
+
+function seedDb(){
+  const breakTypes = DEFAULT_BREAK_TYPES.map(b => ({...b, id: uid("bt")}));
+  const employees = seedEmployees();
+  return {
+    employees,
+    breakTypes,
+    records: seedRecords(employees, breakTypes),
+    audit: [{ id:uid("log"), timestamp:new Date().toISOString(), employeeName:"System", action:"System initialized", detail:"Demo data loaded" }],
+    settings: { company:"Your Company", refreshMs: REFRESH_MS },
+  };
+}
+
+/* ---------------- action engine (shared shape with backend) -- */
+function applyAction(db, action, p){
+  const d = clone(db);
+  const now = new Date().toISOString();
+  switch(action){
+    case "startBreak": {
+      const emp = d.employees.find(e => e.empId === p.employeeId);
+      const bt = d.breakTypes.find(b => b.id === p.breakTypeId);
+      if (!emp || !bt) break;
+      // guard: close any stray open break first
+      d.records.forEach(r => { if (r.employeeId===emp.empId && r.status==="On Break"){ r.status="Returned"; r.endTime=now; r.durationMin=Math.round(recMins(r, Date.now())); }});
+      d.records.push({
+        id: uid("rec"), employeeId: emp.empId, employeeName: emp.name, department: emp.department, teamLead: emp.teamLead,
+        breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
+        startTime: now, endTime: null, durationMin: null, note: p.note||"", date: todayStr(), status:"On Break",
+      });
+      break;
+    }
+    case "endBreak": {
+      const r = d.records.find(x => x.id === p.recordId);
+      if (r && r.status === "On Break"){
+        r.endTime = now;
+        r.durationMin = Math.round(recMins(r, Date.now()));
+        r.status = "Returned";
+      }
+      break;
+    }
+    case "addEmployee": {
+      d.employees.push({ id: uid("emp"), status:"Active", ...p });
+      break;
+    }
+    case "updateEmployee": {
+      const i = d.employees.findIndex(e => e.id === p.id);
+      if (i>=0) d.employees[i] = { ...d.employees[i], ...p };
+      break;
+    }
+    case "deleteEmployee": {
+      d.employees = d.employees.filter(e => e.id !== p.id);
+      break;
+    }
+    case "addBreakType": {
+      d.breakTypes.push({ id: uid("bt"), active:true, ...p });
+      break;
+    }
+    case "updateBreakType": {
+      const i = d.breakTypes.findIndex(b => b.id === p.id);
+      if (i>=0) d.breakTypes[i] = { ...d.breakTypes[i], ...p };
+      break;
+    }
+    case "deleteBreakType": {
+      d.breakTypes = d.breakTypes.filter(b => b.id !== p.id);
+      break;
+    }
+    case "updateSettings": {
+      d.settings = { ...d.settings, ...p };
+      break;
+    }
+    case "addAudit": {
+      d.audit.unshift({ id: uid("log"), timestamp: now, employeeName: p.employeeName||"—", action: p.action, detail: p.detail||"" });
+      d.audit = d.audit.slice(0, 500);
+      break;
+    }
+    case "resetDemo": {
+      return seedDb();
+    }
+    default: break;
+  }
+  return d;
+}
+
+/* ---------------- storage layer (pluggable) ------------------ */
+// lazy-load a script only when its provider is selected
+function loadScript(src){
+  return new Promise((resolve, reject) => {
+    if ([...document.scripts].some(s => s.src === src)) return resolve();
+    const el = document.createElement("script");
+    el.src = src; el.onload = () => resolve(); el.onerror = () => reject(new Error("load "+src));
+    document.head.appendChild(el);
+  });
+}
+
+let _supa = null, _fs = null;
+async function supaClient(){
+  if (_supa) return _supa;
+  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
+  _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _supa;
+}
+async function fsDb(){
+  if (_fs) return _fs;
+  await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+  await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js");
+  if (!window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
+  _fs = window.firebase.firestore();
+  return _fs;
+}
+function jsonbinHeaders(write){
+  const h = { "X-Master-Key": JSONBIN_KEY, "X-Bin-Meta": "false" };
+  if (write) h["Content-Type"] = "application/json";
+  return h;
+}
+
+// apps_script keeps its action-based backend (server applies + returns full db)
+async function appsGet(){
+  const res = await fetch(APPS_SCRIPT_URL, { method:"GET" });
+  return normalizeDb(await res.json());
+}
+async function appsPost(action, payload){
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method:"POST",
+    headers: { "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, payload }),
+  });
+  return normalizeDb(await res.json());
+}
+
+const Cloud = {
+  // load whole db from the active store -> db object, or null if nothing stored yet
+  async load(){
+    if (MODE === "apps_script") return await appsGet();
+    if (MODE === "supabase"){
+      const c = await supaClient();
+      const { data, error } = await c.from(SUPABASE_TABLE).select("data").eq("id", CLOUD_ID).maybeSingle();
+      if (error) throw error;
+      return data && data.data ? normalizeDb(data.data) : null;
+    }
+    if (MODE === "firebase"){
+      const d = await fsDb();
+      const snap = await d.collection("break_mgmt").doc(CLOUD_ID).get();
+      return snap.exists ? normalizeDb(snap.data()) : null;
+    }
+    if (MODE === "jsonbin"){
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, { headers: jsonbinHeaders(false) });
+      if (!res.ok) throw new Error("jsonbin "+res.status);
+      const j = await res.json();
+      const rec = j.record || j;
+      return rec && rec.employees ? normalizeDb(rec) : null;
+    }
+    return null;
+  },
+  // overwrite whole db (blob stores); apps_script writes via appsPost instead
+  async save(db){
+    const clean = normalizeDb(db);
+    if (MODE === "supabase"){
+      const c = await supaClient();
+      const { error } = await c.from(SUPABASE_TABLE).upsert({ id: CLOUD_ID, data: clean });
+      if (error) throw error;
+    } else if (MODE === "firebase"){
+      const d = await fsDb();
+      await d.collection("break_mgmt").doc(CLOUD_ID).set(clean);
+    } else if (MODE === "jsonbin"){
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+        method:"PUT", headers: jsonbinHeaders(true), body: JSON.stringify(clean)
+      });
+      if (!res.ok) throw new Error("jsonbin "+res.status);
+    }
+  },
+};
+
+/* ---------------- aggregations ------------------------------- */
+function rangeRecords(records, when, ref){
+  if (when==="today") return records.filter(r => r.date === todayStr());
+  if (when==="week") return records.filter(r => weekKey(r.date) === weekKey(ref||new Date()));
+  if (when==="month") return records.filter(r => monthKey(r.date) === monthKey(ref||new Date()));
+  return records;
+}
+function summarize(records, now){
+  const minutes = records.reduce((s,r)=> s + recMins(r, now), 0);
+  const durs = records.map(r => recMins(r, now));
+  return {
+    count: records.length,
+    minutes,
+    avg: records.length ? minutes/records.length : 0,
+    longest: durs.length ? Math.max(...durs) : 0,
+    shortest: durs.length ? Math.min(...durs) : 0,
+  };
+}
+function liveBreaks(records){ return records.filter(r => r.status === "On Break" && r.date === todayStr()); }
+
+/* ---------------- export utilities --------------------------- */
+function downloadBlob(content, filename, type){
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+}
+function exportCSV(columns, rows, filename){
+  const esc = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
+  const csv = [columns.map(esc).join(","), ...rows.map(r => r.map(esc).join(","))].join("\n");
+  downloadBlob(csv, filename + ".csv", "text/csv;charset=utf-8;");
+}
+function exportExcel(sheetName, columns, rows, filename){
+  if (typeof XLSX === "undefined") return exportCSV(columns, rows, filename);
+  const ws = XLSX.utils.aoa_to_sheet([columns, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31) || "Report");
+  XLSX.writeFile(wb, filename + ".xlsx");
+}
+function exportPDF(title, subtitle, columns, rows, filename){
+  if (!window.jspdf) return exportCSV(columns, rows, filename);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: columns.length > 6 ? "landscape" : "portrait" });
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(15,23,42); doc.rect(0,0,W,26,"F");
+  doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text(title, 14, 13);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(180,190,210);
+  doc.text(subtitle || "", 14, 20);
+  doc.setTextColor(120,130,150); doc.setFontSize(8);
+  doc.text("Generated " + new Date().toLocaleString(), W-14, 20, { align:"right" });
+  doc.autoTable({
+    head: [columns], body: rows, startY: 32,
+    styles: { fontSize: 8, cellPadding: 2.5 },
+    headStyles: { fillColor: [30,41,59], textColor: 255, fontStyle:"bold" },
+    alternateRowStyles: { fillColor: [245,247,250] },
+    margin: { left: 14, right: 14 },
+  });
+  doc.save(filename + ".pdf");
+}
+
+/* ============================================================
+   UI PRIMITIVES
+   ============================================================ */
+function Btn({ children, onClick, variant="primary", size="md", className="", type="button", disabled }){
+  const base = "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed";
+  const sizes = { sm:"text-xs px-2.5 py-1.5", md:"text-sm px-3.5 py-2", lg:"text-base px-5 py-2.5" };
+  const variants = {
+    primary:"bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm",
+    ghost:"bg-transparent hover:bg-slate-200/70 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200",
+    outline:"border border-slate-300 dark:border-white/15 hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200",
+    danger:"bg-rose-600 hover:bg-rose-500 text-white",
+    success:"bg-emerald-600 hover:bg-emerald-500 text-white",
+    subtle:"bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-100",
+  };
+  return <button type={type} disabled={disabled} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>{children}</button>;
+}
+
+function Card({ children, className="" }){
+  return <div className={`bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm ${className}`}>{children}</div>;
+}
+
+function StatCard({ label, value, sub, accent="#6366F1", icon }){
+  return (
+    <Card className="p-4 overflow-hidden relative">
+      <div className="absolute right-0 top-0 h-full w-1.5" style={{ background: accent }}></div>
+      <div className="flex items-start justify-between">
+        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
+        {icon && <div className="text-lg leading-none" style={{ color: accent }}>{icon}</div>}
+      </div>
+      <div className="mt-2 font-display text-2xl font-bold text-slate-900 dark:text-white tnum">{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</div>}
+    </Card>
+  );
+}
+
+function Field({ label, children, hint }){
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</span>
+      {children}
+      {hint && <span className="block text-[11px] text-slate-400 mt-1">{hint}</span>}
+    </label>
+  );
+}
+const inputCls = "w-full rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#0B1220] px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400";
+function TextInput(props){ return <input {...props} className={inputCls + " " + (props.className||"")} />; }
+function Select({ children, ...props }){ return <select {...props} className={inputCls + " " + (props.className||"")}>{children}</select>; }
+
+function Modal({ open, onClose, title, children, wide }){
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/50 backdrop-blur-sm no-print" onMouseDown={onClose}>
+      <div className={`mt-8 w-full ${wide?"max-w-3xl":"max-w-md"} bg-white dark:bg-[#111A2E] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10`} onMouseDown={e=>e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-white/10">
+          <h3 className="font-display font-semibold text-slate-900 dark:text-white">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xl leading-none">×</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, color="slate" }){
+  const map = {
+    slate:"bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300",
+    green:"bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+    amber:"bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+    red:"bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+    indigo:"bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+  };
+  return <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${map[color]}`}>{children}</span>;
+}
+
+function StatusPill({ state }){
+  // state: working | onbreak | exceeded
+  const cfg = {
+    working:{ c:"green", dot:"#10B981", label:"Working" },
+    onbreak:{ c:"amber", dot:"#F59E0B", label:"On Break" },
+    exceeded:{ c:"red", dot:"#F43F5E", label:"Exceeded" },
+  }[state];
+  return <Badge color={cfg.c}><span className="dot" style={{background:cfg.dot}}></span>{cfg.label}</Badge>;
+}
+
+/* Chart wrapper */
+function ChartBox({ type, data, options, height=240, dark }){
+  const ref = useRef(null);
+  const inst = useRef(null);
+  useEffect(() => {
+    if (!window.Chart || !ref.current) return;
+    const grid = dark ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)";
+    const tick = dark ? "rgba(226,232,240,.7)" : "rgba(71,85,105,.85)";
+    const baseOpts = {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color: tick, font:{ family:"Inter", size:11 }, boxWidth:12, padding:12 } } },
+      scales: type==="doughnut" || type==="pie" ? {} : {
+        x:{ grid:{ color: grid }, ticks:{ color: tick, font:{ size:10 } } },
+        y:{ grid:{ color: grid }, ticks:{ color: tick, font:{ size:10 } }, beginAtZero:true },
+      },
+    };
+    inst.current = new Chart(ref.current, { type, data, options: { ...baseOpts, ...(options||{}) } });
+    return () => { if (inst.current) inst.current.destroy(); };
+  }, [JSON.stringify(data), type, dark]);
+  return <div style={{ height }}><canvas ref={ref}></canvas></div>;
+}
+
+/* Live timer for an ongoing break */
+function LiveTimer({ startTime, maxMinutes, big }){
+  const [, force] = useState(0);
+  useEffect(() => { const t = setInterval(()=>force(x=>x+1), 1000); return ()=>clearInterval(t); }, []);
+  const secs = (Date.now() - new Date(startTime).getTime())/1000;
+  const exceeded = maxMinutes && secs/60 > maxMinutes;
+  const color = exceeded ? "#F43F5E" : "#F59E0B";
+  return <span className={`font-mono font-semibold tnum ${big?"text-4xl sm:text-5xl":"text-sm"}`} style={{ color }}>{fmtClock(secs)}</span>;
+}
+
+/* Export menu */
+function ExportMenu({ title, subtitle, columns, rows, filename, label="Export" }){
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h); return ()=>document.removeEventListener("mousedown", h);
+  }, []);
+  const disabled = !rows || rows.length === 0;
+  return (
+    <div className="relative" ref={ref}>
+      <Btn variant="outline" size="sm" onClick={()=>setOpen(o=>!o)} disabled={disabled}>⬇ {label}</Btn>
+      {open && (
+        <div className="absolute right-0 mt-1 w-36 z-20 bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-lg shadow-lg py-1 text-sm">
+          {[["Excel",()=>exportExcel(title,columns,rows,filename)],["PDF",()=>exportPDF(title,subtitle||"",columns,rows,filename)],["CSV",()=>exportCSV(columns,rows,filename)]].map(([t,fn])=>(
+            <button key={t} onClick={()=>{fn(); setOpen(false);}} className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200">{t}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Simple data table */
+function DataTable({ columns, rows, empty="No records." }){
+  return (
+    <div className="overflow-x-auto -mx-1 px-1">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
+            {columns.map((c,i)=><th key={i} className="px-3 py-2.5 font-medium whitespace-nowrap">{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length===0 ? (
+            <tr><td colSpan={columns.length} className="px-3 py-8 text-center text-slate-400">{empty}</td></tr>
+          ) : rows.map((r,i)=>(
+            <tr key={i} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[.03]">
+              {r.map((cell,j)=><td key={j} className="px-3 py-2.5 align-middle whitespace-nowrap">{cell}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SectionTitle({ children, right }){
+  return (
+    <div className="flex items-center justify-between mb-3 gap-3">
+      <h2 className="font-display text-lg font-semibold text-slate-900 dark:text-white">{children}</h2>
+      {right}
+    </div>
+  );
+}
+
+/* ============================================================
+   CHART DATA BUILDERS
+   ============================================================ */
+const PALETTE = ["#6366F1","#10B981","#F59E0B","#22D3EE","#F43F5E","#A78BFA","#0EA5E9","#F472B6","#84CC16","#FB923C"];
+
+function trendData(records, mode, now){
+  const buckets = [];
+  const n = mode==="day"?14:mode==="week"?8:6;
+  for (let i=n-1;i>=0;i--){
+    let key, label;
+    if (mode==="day"){ const d=new Date(now-i*86400000); key=dateStr(d); label=fmtDay(d); }
+    else if (mode==="week"){ const d=new Date(now-i*7*86400000); key=weekKey(d); label=fmtDay(new Date(key)); }
+    else { const d=new Date(); d.setMonth(d.getMonth()-i); key=monthKey(d); label=d.toLocaleDateString([], {month:"short"}); }
+    buckets.push({ key, label, mins:0 });
+  }
+  const idx = {}; buckets.forEach((b,i)=>idx[b.key]=i);
+  records.forEach(r => {
+    const k = mode==="day"? r.date : mode==="week"? weekKey(r.date) : monthKey(r.date);
+    if (idx[k]!=null) buckets[idx[k]].mins += recMins(r, now);
+  });
+  return {
+    labels: buckets.map(b=>b.label),
+    datasets: [{ label:"Break minutes", data: buckets.map(b=>Math.round(b.mins)), backgroundColor:"#6366F1", borderColor:"#6366F1", borderRadius:6, maxBarThickness:34, tension:.35, fill:false }],
+  };
+}
+function typeDistData(records, breakTypes, now){
+  const m = {}; records.forEach(r => { m[r.breakType] = (m[r.breakType]||0) + 1; });
+  const labels = Object.keys(m);
+  const colors = labels.map(l => (breakTypes.find(b=>b.name===l)||{}).color || "#94A3B8");
+  return { labels, datasets:[{ data: labels.map(l=>m[l]), backgroundColor: colors, borderWidth:0 }] };
+}
+function groupBarData(records, field, now, label){
+  const m = {}; records.forEach(r => { const k = r[field] || "—"; m[k] = (m[k]||0) + recMins(r, now); });
+  const labels = Object.keys(m);
+  return { labels, datasets:[{ label, data: labels.map(k=>Math.round(m[k])), backgroundColor: labels.map((_,i)=>PALETTE[i%PALETTE.length]), borderRadius:6, maxBarThickness:38 }] };
+}
+function rankingData(records, now, top=10){
+  const m = {}; records.forEach(r => { m[r.employeeName] = (m[r.employeeName]||0) + recMins(r, now); });
+  const sorted = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0, top);
+  return {
+    labels: sorted.map(s=>s[0]),
+    datasets:[{ label:"Break minutes", data: sorted.map(s=>Math.round(s[1])), backgroundColor:"#6366F1", borderRadius:6 }],
+  };
+}
+
+/* ============================================================
+   LOGIN
+   ============================================================ */
+function LoginScreen({ db, onLogin, theme, toggleTheme }){
+  const [empId, setEmpId] = useState("");
+  const [pin, setPin] = useState("");
+  const [err, setErr] = useState("");
+
+  const submit = () => {
+    const e = db.employees.find(x => x.empId.toLowerCase() === empId.trim().toLowerCase());
+    if (!e){ setErr("Employee ID not found."); return; }
+    if (e.status !== "Active"){ setErr("This account is deactivated."); return; }
+    if (String(e.pin) !== pin.trim()){ setErr("Incorrect PIN."); return; }
+    setErr(""); onLogin(e);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-[#0B1220] dark:to-[#0a0f1c]">
+      <div className="absolute top-4 right-4">
+        <Btn variant="ghost" size="sm" onClick={toggleTheme}>{theme==="dark"?"☀ Light":"🌙 Dark"}</Btn>
+      </div>
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white text-2xl font-display font-bold shadow-lg shadow-indigo-600/25">⏱</div>
+          <h1 className="mt-4 font-display text-2xl font-bold text-slate-900 dark:text-white">Break Manager</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Track breaks. See live status. Report instantly.</p>
+        </div>
+        <Card className="p-6">
+          <div className="space-y-4">
+            <Field label="Employee ID">
+              <TextInput value={empId} onChange={e=>setEmpId(e.target.value)} placeholder="e.g. EMP-101" onKeyDown={e=>e.key==="Enter"&&submit()} autoFocus />
+            </Field>
+            <Field label="PIN">
+              <TextInput type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="••••" onKeyDown={e=>e.key==="Enter"&&submit()} />
+            </Field>
+            {err && <div className="text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-3 py-2">{err}</div>}
+            <Btn size="lg" className="w-full" onClick={submit}>Sign in</Btn>
+          </div>
+        </Card>
+        <p className="text-center text-[11px] text-slate-400 mt-4 leading-relaxed">
+          Demo logins — Admin: <span className="font-mono">ADMIN / 1234</span> · Lead: <span className="font-mono">LEAD-OPS / 1111</span> · Employee: <span className="font-mono">EMP-101 / 0001</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   EMPLOYEE VIEW
+   ============================================================ */
+function StartBreakModal({ open, onClose, breakTypes, onStart }){
+  const [typeId, setTypeId] = useState("");
+  const [note, setNote] = useState("");
+  const active = breakTypes.filter(b=>b.active);
+  useEffect(()=>{ if(open){ setTypeId(""); setNote(""); } }, [open]);
+  return (
+    <Modal open={open} onClose={onClose} title="Start a break">
+      <div className="space-y-4">
+        <div>
+          <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Select break type</span>
+          <div className="grid grid-cols-2 gap-2">
+            {active.map(b => (
+              <button key={b.id} onClick={()=>setTypeId(b.id)}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm text-left transition ${typeId===b.id?"border-indigo-500 ring-2 ring-indigo-400/40 bg-indigo-50 dark:bg-indigo-500/10":"border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"}`}>
+                <span className="dot" style={{background:b.color, width:10, height:10}}></span>
+                <span className="flex-1">
+                  <span className="block font-medium text-slate-800 dark:text-slate-100">{b.name}</span>
+                  <span className="block text-[11px] text-slate-400">limit {b.maxMinutes}m</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <Field label="Note (optional)">
+          <TextInput value={note} onChange={e=>setNote(e.target.value)} placeholder="Reason / context" />
+        </Field>
+        <div className="flex gap-2 justify-end">
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn disabled={!typeId} onClick={()=>onStart(typeId, note)}>Start break</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function EmployeeView({ db, user, dispatch, theme }){
+  const dark = theme === "dark";
+  const [showStart, setShowStart] = useState(false);
+  const now = Date.now();
+  const myRecords = useMemo(()=> db.records.filter(r => r.employeeId === user.empId), [db.records, user.empId]);
+  const active = myRecords.find(r => r.status === "On Break");
+
+  const today = summarize(rangeRecords(myRecords,"today"), now);
+  const week = summarize(rangeRecords(myRecords,"week"), now);
+  const month = summarize(rangeRecords(myRecords,"month"), now);
+
+  const start = (typeId, note) => {
+    const bt = db.breakTypes.find(b=>b.id===typeId);
+    dispatch("startBreak", { employeeId:user.empId, breakTypeId:typeId, note },
+      { employeeName:user.name, action:"Break started", detail: bt? bt.name : "" });
+    setShowStart(false);
+  };
+  const end = () => {
+    dispatch("endBreak", { recordId: active.id },
+      { employeeName:user.name, action:"Break ended", detail: active.breakType });
+  };
+
+  const histRows = [...myRecords].sort((a,b)=> new Date(b.startTime)-new Date(a.startTime)).slice(0,40).map(r => [
+    fmtDay(r.date),
+    <span className="inline-flex items-center gap-1.5"><span className="dot" style={{background:r.breakTypeColor}}></span>{r.breakType}</span>,
+    fmtTime(r.startTime),
+    r.endTime ? fmtTime(r.endTime) : <Badge color="amber">ongoing</Badge>,
+    r.status==="On Break" ? <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /> :
+      <span className={isExceeded(r, now)?"text-rose-600 font-medium":""}>{fmtMins(r.durationMin)}</span>,
+    isExceeded(r, now) ? <Badge color="red">over</Badge> : <Badge color="green">ok</Badge>,
+  ]);
+
+  return (
+    <div className="space-y-6">
+      {/* Action / live state */}
+      <Card className="p-6">
+        {active ? (
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className={`flex items-center justify-center w-28 h-28 rounded-full border-4 ${isExceeded(active,now)?"border-rose-400 pulse-red":"border-amber-400 pulse-amber"}`}>
+              <LiveTimer startTime={active.startTime} maxMinutes={active.maxMinutes} big />
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Currently on</div>
+              <div className="font-display text-2xl font-bold text-slate-900 dark:text-white flex items-center justify-center sm:justify-start gap-2">
+                <span className="dot" style={{background:active.breakTypeColor, width:12, height:12}}></span>{active.breakType}
+              </div>
+              <div className="text-sm text-slate-500 mt-1">Started {fmtTime(active.startTime)} · limit {active.maxMinutes}m {isExceeded(active,now) && <span className="text-rose-600 font-medium">· limit exceeded</span>}</div>
+              {active.note && <div className="text-sm text-slate-400 mt-1 italic">“{active.note}”</div>}
+            </div>
+            <Btn variant="danger" size="lg" onClick={end}>End break</Btn>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="font-display text-xl font-semibold text-slate-900 dark:text-white">You're working <span className="dot ml-1" style={{background:"#10B981"}}></span></div>
+              <div className="text-sm text-slate-500">Take a break when you need one — it's logged automatically.</div>
+            </div>
+            <Btn variant="success" size="lg" onClick={()=>setShowStart(true)}>▶ Start break</Btn>
+          </div>
+        )}
+      </Card>
+
+      {/* Summaries */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[["Today",today,"#6366F1"],["This week",week,"#22D3EE"],["This month",month,"#10B981"]].map(([t,s,c])=>(
+          <Card key={t} className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{color:c}}>{t}</div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <Mini label="Breaks" value={s.count} />
+              <Mini label="Minutes" value={fmtMins(s.minutes)} />
+              <Mini label={t==="Today"?"Longest":"Avg / break"} value={t==="Today"?fmtMins(s.longest):fmtMins(s.avg)} />
+              <Mini label={t==="Today"?"Avg / break":(t==="This week"?"Avg / day":"Avg / week")} value={t==="Today"?fmtMins(s.avg):(t==="This week"?fmtMins(s.minutes/7):fmtMins(s.minutes/4))} />
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* History */}
+      <Card className="p-4">
+        <SectionTitle right={<ExportMenu title="My Break History" subtitle={user.name} columns={["Date","Break Type","Start","End","Duration (min)","Exceeded"]}
+          rows={myRecords.map(r=>[r.date,r.breakType,fmtTime(r.startTime),r.endTime?fmtTime(r.endTime):"ongoing",r.endTime?r.durationMin:Math.round(recMins(r,now)),isExceeded(r,now)?"Yes":"No"])}
+          filename={"my-breaks-"+todayStr()} />}>My break history</SectionTitle>
+        <DataTable columns={["Date","Type","Start","End","Duration","Status"]} rows={histRows} empty="No breaks yet." />
+      </Card>
+
+      <StartBreakModal open={showStart} onClose={()=>setShowStart(false)} breakTypes={db.breakTypes} onStart={start} />
+    </div>
+  );
+}
+function Mini({ label, value }){
+  return <div><div className="text-lg font-bold font-display tnum text-slate-900 dark:text-white">{value}</div><div className="text-[11px] text-slate-400">{label}</div></div>;
+}
+
+/* ============================================================
+   LIVE STATUS TABLE (shared)
+   ============================================================ */
+function LiveStatusTable({ employees, records, now }){
+  const live = liveBreaks(records);
+  const liveByEmp = {}; live.forEach(r => liveByEmp[r.employeeId] = r);
+  const rows = employees.filter(e=>e.role!=="Admin" && e.status==="Active").map(e => {
+    const r = liveByEmp[e.empId];
+    const state = !r ? "working" : (isExceeded(r, now) ? "exceeded" : "onbreak");
+    return [
+      <span className="font-medium text-slate-800 dark:text-slate-100">{e.name}</span>,
+      e.department,
+      r ? <span className="inline-flex items-center gap-1.5"><span className="dot" style={{background:r.breakTypeColor}}></span>{r.breakType}</span> : <span className="text-slate-400">—</span>,
+      r ? fmtTime(r.startTime) : <span className="text-slate-400">—</span>,
+      r ? <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /> : <span className="text-slate-400">—</span>,
+      <StatusPill state={state} />,
+    ];
+  }).sort((a,b)=>0);
+  return <DataTable columns={["Employee","Department","Break Type","Started","Duration","Status"]} rows={rows} empty="No active employees." />;
+}
+
+/* ============================================================
+   ADMIN VIEW
+   ============================================================ */
+function AdminView({ db, dispatch, theme, section, setSection }){
+  const dark = theme === "dark";
+  const now = Date.now();
+  const emps = db.employees.filter(e => e.role !== "Admin");
+  const activeEmps = emps.filter(e => e.status === "Active");
+  const todayRecs = rangeRecords(db.records, "today");
+  const live = liveBreaks(db.records);
+  const exceeding = live.filter(r => isExceeded(r, now));
+  const sToday = summarize(todayRecs, now);
+
+  return (
+    <div className="space-y-6">
+      {section==="dashboard" && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Employees" value={activeEmps.length} sub={`${emps.length} total`} accent="#6366F1" icon="👥" />
+            <StatCard label="On Break Now" value={live.length} sub={`${exceeding.length} over limit`} accent="#F59E0B" icon="⏸" />
+            <StatCard label="Breaks Today" value={sToday.count} accent="#22D3EE" icon="📊" />
+            <StatCard label="Break Min Today" value={fmtMins(sToday.minutes)} accent="#10B981" icon="⏱" />
+            <StatCard label="Avg Break" value={fmtMins(sToday.avg)} accent="#A78BFA" />
+            <StatCard label="Longest Today" value={fmtMins(sToday.longest)} accent="#F472B6" />
+            <StatCard label="Over Limit" value={exceeding.length} accent="#F43F5E" icon="🚩" />
+            <StatCard label="Working Now" value={activeEmps.length - live.length} accent="#0EA5E9" />
+          </div>
+
+          {exceeding.length > 0 && (
+            <Card className="p-4 border-rose-200 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/[.06]">
+              <div className="flex items-center gap-2 mb-2 text-rose-700 dark:text-rose-300 font-semibold text-sm">🚩 {exceeding.length} employee{exceeding.length>1?"s":""} exceeding break limit</div>
+              <div className="flex flex-wrap gap-2">
+                {exceeding.map(r => <Badge key={r.id} color="red">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></Badge>)}
+              </div>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="p-4"><SectionTitle>Daily break trend (14d)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(db.records,"day",now)} /></Card>
+            <Card className="p-4"><SectionTitle>Break type distribution</SectionTitle><ChartBox type="doughnut" dark={dark} data={typeDistData(db.records, db.breakTypes, now)} options={{cutout:"58%"}} /></Card>
+            <Card className="p-4"><SectionTitle>Weekly trend (8w)</SectionTitle><ChartBox type="line" dark={dark} data={trendData(db.records,"week",now)} /></Card>
+            <Card className="p-4"><SectionTitle>Monthly trend (6m)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(db.records,"month",now)} /></Card>
+            <Card className="p-4"><SectionTitle>Department-wise break time</SectionTitle><ChartBox type="bar" dark={dark} data={groupBarData(db.records,"department",now,"Minutes")} /></Card>
+            <Card className="p-4"><SectionTitle>Team-wise break time</SectionTitle><ChartBox type="bar" dark={dark} data={groupBarData(db.records,"teamLead",now,"Minutes")} /></Card>
+            <Card className="p-4 lg:col-span-2"><SectionTitle>Employee ranking — top 10 by break time</SectionTitle><ChartBox type="bar" dark={dark} height={300} data={rankingData(db.records, now, 10)} options={{indexAxis:"y"}} /></Card>
+          </div>
+        </>
+      )}
+
+      {section==="live" && (
+        <Card className="p-4">
+          <SectionTitle right={<Badge color="amber"><span className="dot" style={{background:"#F59E0B"}}></span>{live.length} on break</Badge>}>Live status</SectionTitle>
+          <LiveStatusTable employees={db.employees} records={db.records} now={now} />
+        </Card>
+      )}
+
+      {section==="employees" && <EmployeesManager db={db} dispatch={dispatch} />}
+      {section==="breaktypes" && <BreakTypesManager db={db} dispatch={dispatch} />}
+      {section==="reports" && <ReportsView db={db} scope="all" />}
+      {section==="audit" && <AuditView db={db} dispatch={dispatch} />}
+    </div>
+  );
+}
+
+/* ----- Employees Manager ----- */
+function EmployeesManager({ db, dispatch }){
+  const [editing, setEditing] = useState(null); // employee or {}
+  const [q, setQ] = useState("");
+  const [dept, setDept] = useState("");
+  const leads = db.employees.filter(e => e.role === "TeamLead");
+  const depts = [...new Set(db.employees.map(e=>e.department).filter(Boolean))];
+
+  const filtered = db.employees.filter(e =>
+    (!q || (e.name+e.empId+e.email).toLowerCase().includes(q.toLowerCase())) &&
+    (!dept || e.department===dept)
+  );
+
+  const save = (data) => {
+    if (data.id) dispatch("updateEmployee", data, { employeeName:"Admin", action:"Employee updated", detail:data.name });
+    else dispatch("addEmployee", data, { employeeName:"Admin", action:"Employee added", detail:data.name });
+    setEditing(null);
+  };
+  const del = (e) => { if (confirm(`Delete ${e.name}? Their break records remain in reports.`)){ dispatch("deleteEmployee", {id:e.id}, {employeeName:"Admin", action:"Employee deleted", detail:e.name}); } };
+  const toggle = (e) => dispatch("updateEmployee", {id:e.id, status: e.status==="Active"?"Inactive":"Active"}, {employeeName:"Admin", action:"Employee "+(e.status==="Active"?"deactivated":"activated"), detail:e.name});
+
+  const leadName = (id) => (leads.find(l=>l.empId===id)||{}).name || "—";
+  const rows = filtered.map(e => [
+    <span className="font-mono text-xs">{e.empId}</span>,
+    <span className="font-medium text-slate-800 dark:text-slate-100">{e.name}</span>,
+    e.department,
+    e.designation,
+    e.role==="Admin"?<Badge color="indigo">Admin</Badge>:e.role==="TeamLead"?<Badge color="indigo">Team Lead</Badge>:<Badge>Employee</Badge>,
+    e.role==="Employee"?leadName(e.teamLead):"—",
+    e.status==="Active"?<Badge color="green">Active</Badge>:<Badge color="slate">Inactive</Badge>,
+    <div className="flex gap-1">
+      <Btn size="sm" variant="ghost" onClick={()=>setEditing(e)}>Edit</Btn>
+      <Btn size="sm" variant="ghost" onClick={()=>toggle(e)}>{e.status==="Active"?"Off":"On"}</Btn>
+      <Btn size="sm" variant="ghost" className="text-rose-600" onClick={()=>del(e)}>Del</Btn>
+    </div>,
+  ]);
+
+  return (
+    <Card className="p-4">
+      <SectionTitle right={
+        <div className="flex items-center gap-2">
+          <ExportMenu title="Employees" columns={["Employee ID","Name","Department","Designation","Role","Team Lead","Email","Phone","Status"]}
+            rows={db.employees.map(e=>[e.empId,e.name,e.department,e.designation,e.role,leadName(e.teamLead),e.email,e.phone,e.status])} filename="employees" />
+          <Btn size="sm" onClick={()=>setEditing({ role:"Employee", status:"Active" })}>+ Add employee</Btn>
+        </div>
+      }>Employees</SectionTitle>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <TextInput placeholder="Search name / ID / email" value={q} onChange={e=>setQ(e.target.value)} className="max-w-xs" />
+        <Select value={dept} onChange={e=>setDept(e.target.value)} className="max-w-[180px]"><option value="">All departments</option>{depts.map(d=><option key={d}>{d}</option>)}</Select>
+      </div>
+      <DataTable columns={["ID","Name","Dept","Designation","Role","Team Lead","Status",""]} rows={rows} />
+      <EmployeeForm employee={editing} leads={leads} depts={depts} onSave={save} onClose={()=>setEditing(null)} />
+    </Card>
+  );
+}
+function EmployeeForm({ employee, leads, depts, onSave, onClose }){
+  const [f, setF] = useState({});
+  useEffect(()=>{ setF(employee ? {...employee} : null); }, [employee]);
+  if (!f) return null;
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const valid = f.name && f.empId && f.pin;
+  return (
+    <Modal open={!!employee} onClose={onClose} title={f.id?"Edit employee":"Add employee"} wide>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Full name"><TextInput value={f.name||""} onChange={e=>set("name",e.target.value)} /></Field>
+        <Field label="Employee ID"><TextInput value={f.empId||""} onChange={e=>set("empId",e.target.value)} placeholder="EMP-106" /></Field>
+        <Field label="Department"><TextInput list="depts" value={f.department||""} onChange={e=>set("department",e.target.value)} /><datalist id="depts">{depts.map(d=><option key={d} value={d} />)}</datalist></Field>
+        <Field label="Designation"><TextInput value={f.designation||""} onChange={e=>set("designation",e.target.value)} /></Field>
+        <Field label="Role"><Select value={f.role||"Employee"} onChange={e=>set("role",e.target.value)}><option value="Employee">Employee</option><option value="TeamLead">Team Lead</option><option value="Admin">Admin</option></Select></Field>
+        <Field label="Team Lead" hint="for employees only">
+          <Select value={f.teamLead||""} onChange={e=>set("teamLead",e.target.value)} disabled={f.role!=="Employee"}>
+            <option value="">—</option>{leads.map(l=><option key={l.empId} value={l.empId}>{l.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Email"><TextInput type="email" value={f.email||""} onChange={e=>set("email",e.target.value)} /></Field>
+        <Field label="Phone"><TextInput value={f.phone||""} onChange={e=>set("phone",e.target.value)} /></Field>
+        <Field label="Login PIN" hint="used with Employee ID to sign in"><TextInput value={f.pin||""} onChange={e=>set("pin",e.target.value)} /></Field>
+        <Field label="Status"><Select value={f.status||"Active"} onChange={e=>set("status",e.target.value)}><option>Active</option><option>Inactive</option></Select></Field>
+      </div>
+      <div className="flex justify-end gap-2 mt-5">
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn disabled={!valid} onClick={()=>onSave(f)}>{f.id?"Save changes":"Add employee"}</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+/* ----- Break Types Manager (incl. limits) ----- */
+function BreakTypesManager({ db, dispatch }){
+  const [editing, setEditing] = useState(null);
+  const save = (data) => {
+    if (data.id) dispatch("updateBreakType", data, {employeeName:"Admin", action:"Break type updated", detail:data.name});
+    else dispatch("addBreakType", data, {employeeName:"Admin", action:"Break type added", detail:data.name});
+    setEditing(null);
+  };
+  const del = (b) => { if(confirm(`Delete break type "${b.name}"?`)) dispatch("deleteBreakType", {id:b.id}, {employeeName:"Admin", action:"Break type deleted", detail:b.name}); };
+  return (
+    <Card className="p-4">
+      <SectionTitle right={<Btn size="sm" onClick={()=>setEditing({ active:true, color:"#6366F1", maxMinutes:15 })}>+ Add break type</Btn>}>Break types & limits</SectionTitle>
+      <p className="text-xs text-slate-400 mb-3">Set the maximum allowed minutes per break type. Anyone exceeding the limit is flagged red across dashboards and reports.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {db.breakTypes.map(b => (
+          <div key={b.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><span className="dot" style={{background:b.color, width:12, height:12}}></span><span className="font-medium text-slate-800 dark:text-slate-100">{b.name}</span></div>
+              {b.active ? <Badge color="green">active</Badge> : <Badge>off</Badge>}
+            </div>
+            <div className="mt-2 text-sm text-slate-500">Limit: <span className="font-semibold text-slate-700 dark:text-slate-200 font-mono">{b.maxMinutes}m</span></div>
+            <div className="flex gap-1 mt-3">
+              <Btn size="sm" variant="ghost" onClick={()=>setEditing(b)}>Edit</Btn>
+              <Btn size="sm" variant="ghost" onClick={()=>save({id:b.id, active:!b.active})}>{b.active?"Disable":"Enable"}</Btn>
+              <Btn size="sm" variant="ghost" className="text-rose-600" onClick={()=>del(b)}>Delete</Btn>
+            </div>
+          </div>
+        ))}
+      </div>
+      <BreakTypeForm bt={editing} onSave={save} onClose={()=>setEditing(null)} />
+    </Card>
+  );
+}
+function BreakTypeForm({ bt, onSave, onClose }){
+  const [f, setF] = useState(null);
+  useEffect(()=>{ setF(bt ? {...bt} : null); }, [bt]);
+  if (!f) return null;
+  const set = (k,v)=>setF(p=>({...p,[k]:v}));
+  return (
+    <Modal open={!!bt} onClose={onClose} title={f.id?"Edit break type":"Add break type"}>
+      <div className="space-y-4">
+        <Field label="Name"><TextInput value={f.name||""} onChange={e=>set("name",e.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Max minutes"><TextInput type="number" min="1" value={f.maxMinutes||0} onChange={e=>set("maxMinutes", parseInt(e.target.value)||0)} /></Field>
+          <Field label="Color"><input type="color" value={f.color||"#6366F1"} onChange={e=>set("color",e.target.value)} className="w-full h-[38px] rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#0B1220]" /></Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!f.active} onChange={e=>set("active",e.target.checked)} /> Active</label>
+        <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn disabled={!f.name} onClick={()=>onSave(f)}>Save</Btn></div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ----- Audit log ----- */
+function AuditView({ db, dispatch }){
+  const rows = db.audit.map(l => [
+    <span className="text-xs text-slate-400 font-mono">{new Date(l.timestamp).toLocaleString()}</span>,
+    <span className="font-medium text-slate-700 dark:text-slate-200">{l.employeeName}</span>,
+    l.action,
+    <span className="text-slate-500">{l.detail}</span>,
+  ]);
+  return (
+    <Card className="p-4">
+      <SectionTitle right={<ExportMenu title="Audit Log" columns={["Timestamp","Employee","Action","Detail"]} rows={db.audit.map(l=>[new Date(l.timestamp).toLocaleString(),l.employeeName,l.action,l.detail])} filename="audit-log" />}>Audit log</SectionTitle>
+      <DataTable columns={["Time","Employee","Action","Detail"]} rows={rows} empty="No activity yet." />
+    </Card>
+  );
+}
+
+/* ============================================================
+   TEAM LEAD VIEW
+   ============================================================ */
+function TeamLeadView({ db, user, theme, section }){
+  const dark = theme === "dark";
+  const now = Date.now();
+  const team = db.employees.filter(e => e.role==="Employee" && e.teamLead === user.empId);
+  const teamIds = new Set(team.map(e=>e.empId));
+  const teamRecords = db.records.filter(r => teamIds.has(r.employeeId));
+  const live = liveBreaks(teamRecords);
+  const exceeding = live.filter(r=>isExceeded(r,now));
+  const sToday = summarize(rangeRecords(teamRecords,"today"), now);
+  const activeTeam = team.filter(e=>e.status==="Active");
+
+  return (
+    <div className="space-y-6">
+      {section==="dashboard" && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <StatCard label="Team Members" value={activeTeam.length} accent="#6366F1" icon="👥" />
+            <StatCard label="On Break" value={live.length} accent="#F59E0B" icon="⏸" />
+            <StatCard label="Working" value={activeTeam.length-live.length} accent="#10B981" />
+            <StatCard label="Break Min Today" value={fmtMins(sToday.minutes)} accent="#22D3EE" icon="⏱" />
+            <StatCard label="Avg Break" value={fmtMins(sToday.avg)} accent="#A78BFA" />
+          </div>
+          {exceeding.length>0 && (
+            <Card className="p-4 border-rose-200 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/[.06]">
+              <div className="text-rose-700 dark:text-rose-300 font-semibold text-sm mb-2">🚩 {exceeding.length} on your team over limit</div>
+              <div className="flex flex-wrap gap-2">{exceeding.map(r=><Badge key={r.id} color="red">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></Badge>)}</div>
+            </Card>
+          )}
+          <Card className="p-4">
+            <SectionTitle right={<Badge color="amber"><span className="dot" style={{background:"#F59E0B"}}></span>{live.length} on break</Badge>}>Live team status</SectionTitle>
+            <LiveStatusTable employees={team.concat()} records={teamRecords} now={now} />
+          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="p-4"><SectionTitle>Team break trend (14d)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(teamRecords,"day",now)} /></Card>
+            <Card className="p-4"><SectionTitle>Team break type distribution</SectionTitle><ChartBox type="doughnut" dark={dark} data={typeDistData(teamRecords, db.breakTypes, now)} options={{cutout:"58%"}} /></Card>
+            <Card className="p-4 lg:col-span-2"><SectionTitle>Team member ranking by break time</SectionTitle><ChartBox type="bar" dark={dark} height={Math.max(220, team.length*36)} data={rankingData(teamRecords, now, 15)} options={{indexAxis:"y"}} /></Card>
+          </div>
+        </>
+      )}
+      {section==="reports" && <ReportsView db={db} scope="team" teamIds={teamIds} teamRecords={teamRecords} teamName={user.name} />}
+    </div>
+  );
+}
+
+/* ============================================================
+   REPORTS
+   ============================================================ */
+function ReportsView({ db, scope, teamIds, teamRecords, teamName }){
+  const now = Date.now();
+  const [tab, setTab] = useState("daily");
+  const [emp, setEmp] = useState("");
+  const [dept, setDept] = useState("");
+  const [type, setType] = useState("");
+  const [date, setDate] = useState(todayStr());
+
+  let records = scope==="team" ? teamRecords : db.records;
+  const empOptions = scope==="team"
+    ? db.employees.filter(e=>teamIds.has(e.empId))
+    : db.employees.filter(e=>e.role!=="Admin");
+  const depts = [...new Set(empOptions.map(e=>e.department).filter(Boolean))];
+
+  // apply filters
+  let filtered = records.filter(r =>
+    (!emp || r.employeeId===emp) &&
+    (!dept || r.department===dept) &&
+    (!type || r.breakType===type)
+  );
+
+  const title = scope==="team" ? `Team Report — ${teamName}` : "Company Report";
+
+  return (
+    <Card className="p-4">
+      <SectionTitle>{title}</SectionTitle>
+      {/* filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Select value={emp} onChange={e=>setEmp(e.target.value)} className="max-w-[180px]"><option value="">All employees</option>{empOptions.map(e=><option key={e.empId} value={e.empId}>{e.name}</option>)}</Select>
+        <Select value={dept} onChange={e=>setDept(e.target.value)} className="max-w-[170px]"><option value="">All departments</option>{depts.map(d=><option key={d}>{d}</option>)}</Select>
+        <Select value={type} onChange={e=>setType(e.target.value)} className="max-w-[170px]"><option value="">All break types</option>{db.breakTypes.map(b=><option key={b.id} value={b.name}>{b.name}</option>)}</Select>
+        {tab==="daily" && <TextInput type="date" value={date} onChange={e=>setDate(e.target.value)} className="max-w-[170px]" />}
+      </div>
+      {/* tabs */}
+      <div className="flex gap-1 mb-4 border-b border-slate-200 dark:border-white/10 overflow-x-auto">
+        {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["department","Department"],["employee","Per-employee"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${tab===k?"border-indigo-500 text-indigo-600 dark:text-indigo-300":"border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>{l}</button>
+        ))}
+      </div>
+
+      {tab==="daily" && <DailyReport records={filtered.filter(r=>r.date===date)} date={date} title={title} now={now} />}
+      {tab==="weekly" && <PeriodReport records={filtered} mode="week" title={title} now={now} />}
+      {tab==="monthly" && <PeriodReport records={filtered} mode="month" title={title} now={now} />}
+      {tab==="department" && <DepartmentReport records={filtered} db={db} title={title} now={now} />}
+      {tab==="employee" && <PerEmployeeReport records={filtered} employees={empOptions} db={db} title={title} now={now} />}
+    </Card>
+  );
+}
+
+function DailyReport({ records, date, title, now }){
+  // group by employee
+  const byEmp = {};
+  records.forEach(r => { (byEmp[r.employeeName] = byEmp[r.employeeName] || []).push(r); });
+  const rows = Object.entries(byEmp).map(([name, recs]) => {
+    const s = summarize(recs, now);
+    const types = [...new Set(recs.map(r=>r.breakType))].join(", ");
+    return [name, recs.length, fmtMins(s.minutes), types, fmtMins(s.longest)];
+  });
+  const exportRows = Object.entries(byEmp).map(([name, recs]) => {
+    const s = summarize(recs, now); return [name, recs.length, Math.round(s.minutes), [...new Set(recs.map(r=>r.breakType))].join(" | "), Math.round(s.longest)];
+  });
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm text-slate-500">{fmtDay(date)} · {records.length} breaks</div>
+        <ExportMenu title={title+" — Daily"} subtitle={fmtDay(date)} columns={["Employee","Total Breaks","Total Minutes","Break Types","Longest (min)"]} rows={exportRows} filename={"daily-report-"+date} />
+      </div>
+      <DataTable columns={["Employee","Total Breaks","Total Minutes","Break Types Used","Longest"]} rows={rows} empty="No breaks on this day." />
+    </div>
+  );
+}
+
+function PeriodReport({ records, mode, title, now }){
+  // group by employee with per-period breakdown
+  const byEmp = {};
+  records.forEach(r => { (byEmp[r.employeeName] = byEmp[r.employeeName] || []).push(r); });
+  const rows = Object.entries(byEmp).map(([name, recs]) => {
+    const s = summarize(recs, now);
+    const days = new Set(recs.map(r=>r.date)).size || 1;
+    return [name, recs.length, fmtMins(s.minutes), fmtMins(s.avg), fmtMins(s.minutes / (mode==="week"?7:days))];
+  }).sort((a,b)=>0);
+  const exportRows = Object.entries(byEmp).map(([name, recs]) => {
+    const s = summarize(recs, now); const days = new Set(recs.map(r=>r.date)).size || 1;
+    return [name, recs.length, Math.round(s.minutes), Math.round(s.avg), Math.round(s.minutes/(mode==="week"?7:days))];
+  });
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm text-slate-500">{mode==="week"?"Current week":"Current month"} · {records.length} breaks</div>
+        <ExportMenu title={title+" — "+(mode==="week"?"Weekly":"Monthly")} columns={["Employee","Break Count","Total Minutes","Avg / Break","Avg / Day"]} rows={exportRows} filename={mode+"-report-"+todayStr()} />
+      </div>
+      <DataTable columns={["Employee","Break Count","Total Minutes","Avg / Break","Avg / Day"]} rows={rows} empty="No breaks in this period." />
+    </div>
+  );
+}
+
+function DepartmentReport({ records, db, title, now }){
+  const byDept = {};
+  records.forEach(r => { (byDept[r.department||"—"] = byDept[r.department||"—"] || []).push(r); });
+  const rows = Object.entries(byDept).map(([d, recs]) => {
+    const s = summarize(recs, now);
+    const tc = {}; recs.forEach(r=>tc[r.breakType]=(tc[r.breakType]||0)+1);
+    const most = Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];
+    return [d, recs.length, fmtMins(s.minutes), fmtMins(s.avg), most?most[0]:"—"];
+  });
+  const exportRows = Object.entries(byDept).map(([d, recs]) => {
+    const s = summarize(recs, now); const tc={}; recs.forEach(r=>tc[r.breakType]=(tc[r.breakType]||0)+1);
+    const most=Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];
+    return [d, recs.length, Math.round(s.minutes), Math.round(s.avg), most?most[0]:"—"];
+  });
+  return (
+    <div>
+      <div className="flex justify-end mb-2"><ExportMenu title={title+" — Department"} columns={["Department","Total Breaks","Total Minutes","Avg / Break","Most Used Type"]} rows={exportRows} filename={"department-report-"+todayStr()} /></div>
+      <DataTable columns={["Department","Total Breaks","Total Minutes","Avg / Break","Most Used Type"]} rows={rows} empty="No data." />
+    </div>
+  );
+}
+
+function PerEmployeeReport({ records, employees, db, title, now }){
+  const leadName = (id) => (db.employees.find(l=>l.empId===id)||{}).name || "—";
+  const data = employees.map(e => {
+    const recs = records.filter(r => r.employeeId === e.empId);
+    const s = summarize(recs, now);
+    const count = (name) => recs.filter(r=>r.breakType===name).length;
+    const other = recs.filter(r=>!["Tea Break","Lunch Break","Prayer (Namaz)","Phone Call"].includes(r.breakType)).length;
+    return { e, recs, s,
+      tea:count("Tea Break"), lunch:count("Lunch Break"), namaz:count("Prayer (Namaz)"), phone:count("Phone Call"), other,
+    };
+  }).filter(d => d.recs.length > 0);
+
+  const rows = data.map(d => [
+    <span className="font-medium text-slate-800 dark:text-slate-100">{d.e.name}</span>,
+    d.e.department, leadName(d.e.teamLead),
+    d.recs.length, fmtMins(d.s.minutes),
+    d.tea, d.lunch, d.namaz, d.phone, d.other,
+    fmtMins(d.s.avg), fmtMins(d.s.longest), fmtMins(d.s.shortest),
+  ]);
+  const exportRows = data.map(d => [
+    d.e.name, d.e.department, leadName(d.e.teamLead), d.recs.length, Math.round(d.s.minutes),
+    d.tea, d.lunch, d.namaz, d.phone, d.other, Math.round(d.s.avg), Math.round(d.s.longest), Math.round(d.s.shortest),
+  ]);
+  const cols = ["Employee","Dept","Team Lead","Breaks","Total Min","Tea","Lunch","Namaz","Phone","Other","Avg","Longest","Shortest"];
+  return (
+    <div>
+      <div className="flex justify-end mb-2"><ExportMenu title={title+" — Per Employee"} columns={cols} rows={exportRows} filename={"employee-report-"+todayStr()} /></div>
+      <DataTable columns={cols} rows={rows} empty="No data." />
+    </div>
+  );
+}
+
+/* ============================================================
+   NOTIFICATIONS (bell)
+   ============================================================ */
+function NotificationsBell({ db, scopeRecords }){
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const now = Date.now();
+  useEffect(() => { const h=e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); }; document.addEventListener("mousedown",h); return ()=>document.removeEventListener("mousedown",h); }, []);
+  const recs = scopeRecords || db.records;
+  const live = liveBreaks(recs);
+  const exceeding = live.filter(r=>isExceeded(r,now));
+  // recent events: last 8 starts/ends today
+  const events = recs.filter(r=>r.date===todayStr())
+    .flatMap(r => [{ t:new Date(r.startTime).getTime(), txt:`${r.employeeName} started ${r.breakType}`, kind:"start" }]
+      .concat(r.endTime ? [{ t:new Date(r.endTime).getTime(), txt:`${r.employeeName} returned from ${r.breakType}`, kind:"end" }] : []))
+    .sort((a,b)=>b.t-a.t).slice(0,8);
+  const badge = exceeding.length;
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={()=>setOpen(o=>!o)} className="relative w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-300">
+        🔔{badge>0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">{badge}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 z-30 bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-200 dark:border-white/10 text-sm font-semibold text-slate-700 dark:text-slate-200">Notifications</div>
+          <div className="max-h-80 overflow-y-auto text-sm">
+            {exceeding.map(r => (
+              <div key={r.id} className="px-3 py-2 bg-rose-50 dark:bg-rose-500/10 border-b border-slate-100 dark:border-white/5">
+                <div className="text-rose-700 dark:text-rose-300 font-medium">🚩 Over limit</div>
+                <div className="text-slate-600 dark:text-slate-300 text-xs">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></div>
+              </div>
+            ))}
+            {events.length===0 && exceeding.length===0 && <div className="px-3 py-6 text-center text-slate-400 text-xs">No activity today.</div>}
+            {events.map((e,i)=>(
+              <div key={i} className="px-3 py-2 border-b border-slate-100 dark:border-white/5 flex items-start gap-2">
+                <span className="dot mt-1.5" style={{background:e.kind==="start"?"#F59E0B":"#10B981"}}></span>
+                <div><div className="text-slate-700 dark:text-slate-200 text-xs">{e.txt}</div><div className="text-[10px] text-slate-400">{new Date(e.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   APP SHELL + ROOT
+   ============================================================ */
+const NAV = {
+  Admin: [["dashboard","Dashboard"],["live","Live"],["employees","Employees"],["breaktypes","Break Types"],["reports","Reports"],["audit","Audit Log"]],
+  TeamLead: [["dashboard","Dashboard"],["reports","Reports"]],
+  Employee: [],
+};
+
+function App(){
+  const [db, setDb] = useState(null);
+  const [user, setUser] = useState(null);
+  const [theme, setTheme] = useState(() => safeStore.get("break_theme") || "light");
+  const [section, setSection] = useState("dashboard");
+  const [, tick] = useState(0);
+  const [syncErr, setSyncErr] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const dbRef = useRef(null);     // always-current db for deterministic writes
+  const busyRef = useRef(false);  // pause poll while a write is in flight
+  const setDbBoth = (d) => { dbRef.current = d; setDb(d); };
+
+  // theme
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme==="dark");
+    safeStore.set("break_theme", theme);
+  }, [theme]);
+
+  // initial load
+  const loadDb = useCallback(async () => {
+    if (isCloud()){
+      try {
+        let data = await Cloud.load();
+        if (!data){                       // empty cloud store → seed it once
+          const seeded = seedDb();
+          if (MODE !== "apps_script") await Cloud.save(seeded);
+          data = seeded;
+        }
+        setDbBoth(data); setSyncErr(false); setLoading(false); return;
+      } catch(e){ setSyncErr(true); }     // fall back to local copy on failure
+    }
+    const raw = safeStore.get(STORE_KEY);
+    if (raw){ try { setDbBoth(JSON.parse(raw)); setLoading(false); return; } catch(e){} }
+    const seeded = seedDb();
+    setDbBoth(seeded); safeStore.set(STORE_KEY, JSON.stringify(seeded)); setLoading(false);
+  }, []);
+
+  useEffect(() => { loadDb(); }, [loadDb]);
+
+  // 1s tick for live durations across the app
+  useEffect(() => { const t = setInterval(()=>tick(x=>x+1), 1000); return ()=>clearInterval(t); }, []);
+
+  // background poll (cloud modes) every REFRESH_MS
+  useEffect(() => {
+    if (!isCloud()) return;
+    const t = setInterval(async () => {
+      if (busyRef.current) return;       // don't clobber an in-flight local write
+      try { const data = await Cloud.load(); if (data){ setDbBoth(data); setSyncErr(false); } }
+      catch(e){ setSyncErr(true); }
+    }, REFRESH_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  const dispatch = useCallback(async (action, payload, audit) => {
+    const base = dbRef.current;
+    if (!base) return;
+    let next = applyAction(base, action, payload);
+    if (audit && MODE !== "apps_script") next = applyAction(next, "addAudit", audit);
+    setDbBoth(next);                       // optimistic local update
+    if (!isCloud()){ safeStore.set(STORE_KEY, JSON.stringify(next)); return; }
+    busyRef.current = true;
+    try {
+      if (MODE === "apps_script"){
+        await appsPost(action, payload);
+        if (audit) await appsPost("addAudit", audit);
+        const data = await appsGet(); setDbBoth(data);
+      } else {
+        await Cloud.save(next);            // blob stores: push whole db
+      }
+      setSyncErr(false);
+    } catch(e){ setSyncErr(true); }
+    finally { busyRef.current = false; }
+  }, []);
+
+  const logout = () => { setUser(null); setSection("dashboard"); };
+  const toggleTheme = () => setTheme(t => t==="dark"?"light":"dark");
+
+  if (loading || !db) return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading…</div>;
+  if (!user) return <LoginScreen db={db} onLogin={(u)=>{ setUser(u); setSection("dashboard"); }} theme={theme} toggleTheme={toggleTheme} />;
+
+  const nav = NAV[user.role] || [];
+  // keep section valid
+  const validSections = nav.map(n=>n[0]);
+  const curSection = user.role==="Employee" ? "me" : (validSections.includes(section) ? section : (validSections[0]||"dashboard"));
+
+  // team records for lead notifications
+  let scopeRecords = db.records;
+  if (user.role==="TeamLead"){
+    const teamIds = new Set(db.employees.filter(e=>e.role==="Employee"&&e.teamLead===user.empId).map(e=>e.empId));
+    scopeRecords = db.records.filter(r=>teamIds.has(r.employeeId));
+  } else if (user.role==="Employee"){
+    scopeRecords = db.records.filter(r=>r.employeeId===user.empId);
+  }
+
+  const roleLabel = { Admin:"Administrator", TeamLead:"Team Lead", Employee:"Employee" }[user.role];
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* top bar */}
+      <header className="sticky top-0 z-40 bg-[#0B1220] text-white border-b border-white/10 no-print">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-display font-bold">⏱</div>
+            <div className="font-display font-semibold tracking-tight">Break Manager</div>
+            {MODE==="local" && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">session mode</span>}
+            {isCloud() && !syncErr && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">{MODE_LABEL} · live</span>}
+            {syncErr && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30">sync error</span>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <NotificationsBell db={db} scopeRecords={scopeRecords} />
+            <button onClick={toggleTheme} className="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-300">{theme==="dark"?"☀":"🌙"}</button>
+            <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-white/10">
+              <div className="text-right leading-tight">
+                <div className="text-sm font-medium">{user.name}</div>
+                <div className="text-[11px] text-slate-400">{roleLabel} · {user.empId}</div>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center text-sm font-semibold">{user.name[0]}</div>
+            </div>
+            <Btn variant="ghost" size="sm" className="text-slate-300 hover:text-white" onClick={logout}>Sign out</Btn>
+          </div>
+        </div>
+        {/* section tabs */}
+        {nav.length>0 && (
+          <div className="max-w-7xl mx-auto px-2 flex gap-0.5 overflow-x-auto">
+            {nav.map(([k,l])=>(
+              <button key={k} onClick={()=>setSection(k)} className={`px-3.5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition ${curSection===k?"border-indigo-400 text-white":"border-transparent text-slate-400 hover:text-slate-200"}`}>{l}</button>
+            ))}
+          </div>
+        )}
+      </header>
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        {syncErr && <div className="mb-4 text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-lg px-3 py-2">Couldn't reach the {MODE_LABEL} store — showing the last data fetched. Check your credentials / deployment in the config block.</div>}
+        {user.role==="Employee" && <EmployeeView db={db} user={user} dispatch={dispatch} theme={theme} />}
+        {user.role==="Admin" && <AdminView db={db} dispatch={dispatch} theme={theme} section={curSection} setSection={setSection} />}
+        {user.role==="TeamLead" && <TeamLeadView db={db} user={user} theme={theme} section={curSection} />}
+      </main>
+
+      <footer className="no-print text-center text-[11px] text-slate-400 py-4">
+        Break Management & Reporting · {db.employees.length} employees · auto-refresh {Math.round(REFRESH_MS/1000)}s
+        {user.role==="Admin" && <button onClick={()=>{ if(confirm("Reset to demo data? This clears local records.")){ dispatch("resetDemo",{}); } }} className="ml-2 underline hover:text-slate-600">reset demo</button>}
+      </footer>
+    </div>
+  );
+}
+
+/* normalize backend payload to expected shape */
+function normalizeDb(data){
+  return {
+    employees: data.employees || [],
+    breakTypes: data.breakTypes || [],
+    records: data.records || [],
+    audit: data.audit || [],
+    settings: data.settings || { refreshMs: REFRESH_MS },
+  };
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
+
+<!--
+================================================================================
+ STORAGE SETUP — pick ONE provider, set STORAGE_MODE at the top, fill its keys.
+ All four work from this single static file on Vercel (no server needed,
+ except Apps Script which is hosted free by Google).
+================================================================================
+
+OPTION 1 — GOOGLE SHEETS  (STORAGE_MODE = "apps_script")
+  1. New Google Sheet → Extensions → Apps Script.
+  2. Paste the contents of break-management-Code.gs, Save.
+  3. Run setup()  (authorize when asked). It builds the tabs + seed data.
+  4. Deploy → New deployment → Web app → Execute as: Me,
+     Who has access: Anyone → Deploy → copy the /exec URL.
+  5. Paste it into APPS_SCRIPT_URL above.
+
+OPTION 2 — SUPABASE  (STORAGE_MODE = "supabase")   [recommended]
+  1. supabase.com → New project.
+  2. SQL Editor → run:
+        create table app_state ( id text primary key, data jsonb );
+        alter table app_state enable row level security;
+        create policy "anon all" on app_state
+          for all to anon using (true) with check (true);
+  3. Project Settings → API → copy the Project URL and the anon public key.
+  4. Paste into SUPABASE_URL and SUPABASE_ANON_KEY above.
+  (The "anon all" policy lets anyone with the key read/write — fine for an
+   internal tool. Tighten later with Supabase Auth if needed.)
+
+OPTION 3 — FIREBASE  (STORAGE_MODE = "firebase")
+  1. console.firebase.google.com → Add project.
+  2. Build → Firestore Database → Create database (Start in test mode).
+  3. Project settings → General → Your apps → Web (</>) → register →
+     copy the firebaseConfig values.
+  4. Paste apiKey / authDomain / projectId / appId into FIREBASE_CONFIG above.
+  (Test mode allows open read/write for 30 days. For longer use, set a rule
+   like:  match /break_mgmt/{id} { allow read, write: if true; }  )
+
+OPTION 4 — JSONBIN  (STORAGE_MODE = "jsonbin")
+  1. jsonbin.io → sign up → API Keys → copy the Master Key.
+  2. Create a new Bin with body  {}  → copy its Bin ID from the URL.
+  3. Paste into JSONBIN_BIN_ID and JSONBIN_KEY above.
+  (The Master Key is visible in page source on a static site. Use an
+   Access Key with read+update scope instead if that matters to you.)
+
+DEPLOY (any option): push index.html to GitHub → import the repo in Vercel →
+deploy. Vercel serves index.html at the root automatically.
+================================================================================
+-->
