@@ -284,6 +284,44 @@ button{font-family:inherit}
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
+
+/* ===== v2 visual polish ===== */
+.dur-over{color:var(--alert);font-weight:800}
+.tbl tr:has(.dur-over) td{background:rgba(190,18,60,.045)}
+.tbl tr:has(.dur-over) td:first-child{box-shadow:inset 3px 0 0 var(--alert)}
+
+/* admin hero strip */
+.hero-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow)}
+.hero-cell{background:linear-gradient(155deg,#131c2b,#1d273b);color:#fff;padding:17px 18px;position:relative}
+.hero-cell.busy{background:linear-gradient(155deg,#2a1c06,#3a2708)}
+.hero-cell.free{background:linear-gradient(155deg,#082019,#0c2f24)}
+.hero-k{font-size:30px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.hero-l{display:flex;align-items:center;gap:7px;font-size:12px;color:#cbd2de;margin-top:8px;font-weight:600}
+.hero-cell.busy .hero-l{color:#fcd9a6}.hero-cell.free .hero-l{color:#a9e3cf}
+.hero-l .dot{width:8px;height:8px}
+@media(max-width:720px){.hero-strip{grid-template-columns:repeat(2,1fr)}.hero-k{font-size:26px}}
+
+/* employee progress ring */
+.ring-wrap{position:relative;width:188px;height:188px;margin:16px auto 8px}
+.ring{width:188px;height:188px;transform:rotate(-90deg);display:block}
+.ring-bg{fill:none;stroke:#eef1f6;stroke-width:12}
+.now-card.on .ring-bg{stroke:#fde6bf}
+.now-card.on.over .ring-bg{stroke:#ffd9de}
+.ring-fg{fill:none;stroke:var(--busy);stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset .6s ease,stroke .3s ease}
+.ring-fg.over{stroke:var(--alert)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ring-center .now-big{margin:0;font-size:38px}
+.ring-cap{font-size:11.5px;color:var(--faint);font-weight:600;margin-top:3px;letter-spacing:.01em}
+.now-card.on.over .ring-cap{color:var(--alert)}
+
+/* settings rule note */
+.rule-note{display:flex;gap:10px;align-items:flex-start;background:var(--alert-bg);border:1px solid var(--alert-line);color:#9f1239;padding:12px 14px;border-radius:11px;font-size:13px;line-height:1.45}
+.rule-note svg{flex:none;margin-top:1px}
+.red-word{color:var(--alert);font-weight:800}
+
+/* stat accent + smoother cards */
+.stat{border-top:2px solid transparent}
+.stat:hover{border-top-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -299,6 +337,7 @@ const { useState, useEffect, useMemo, useRef, useCallback } = React;
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyOEMM7ZOcw-DLI8Rt6OHycRlso5MlZgibSzPUNd_3PllhaAp0AbCHwIEklsA_ihTY-lg/exec"; // Google Sheets sync backend
 const LS_KEY = "bmt_ecom_v1";
 const DEPARTMENT = "Ecommerce";
+const RED_LIMIT = 12; // a single break over this many minutes is flagged red
 
 /* ---------- defaults / seed ---------- */
 const uid = (p) => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -314,7 +353,7 @@ const DEFAULT_EMPLOYEES = [
   ["Bilal Ahmed","employee"],["Hira Yousaf","employee"],["Usman Tariq","employee"]
 ].map(([name,role]) => ({ id: uid("emp"), name, role }));
 
-const DEFAULT_SETTINGS = { longBreakLimitMin: 30, adminPasscode: "admin" };
+const DEFAULT_SETTINGS = { longBreakLimitMin: RED_LIMIT, adminPasscode: "admin" };
 
 function seedState(){
   return { employees: DEFAULT_EMPLOYEES, breakTypes: DEFAULT_BREAK_TYPES, breaks: [], settings: { ...DEFAULT_SETTINGS } };
@@ -331,7 +370,7 @@ function fmtDuration(min){ if(min==null||isNaN(min)) return "—"; min=Math.max(
 function fmtTimer(ms){ const t=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(t/3600); const m=Math.floor((t%3600)/60); const s=t%60; return (h>0?h+":":"")+pad(m)+":"+pad(s); }
 function minutesBetween(a,b){ return (new Date(b)-new Date(a))/60000; }
 const nowISO = () => new Date().toISOString();
-const initials = (name) => (name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const initials = (name) => (String(name==null?"":name).trim().split(/\s+/).filter(Boolean).map(w=>w[0]).join("").slice(0,2).toUpperCase())||"?";
 const CHART_COLORS = ["#4338ca","#0ea5b7","#d97706","#059669","#db2777","#7c3aed","#dc2626","#0891b2","#65a30d","#9333ea","#e11d48","#2563eb"];
 
 /* ---------- pure reducers (local mode) ---------- */
@@ -408,11 +447,12 @@ function useAppState(){
 }
 
 function normalize(res){
+  const str=v=>v==null?"":String(v);
   return {
-    employees: res.employees||[],
-    breakTypes: res.breakTypes||[],
-    breaks: (res.breaks||[]).map(b=>({...b, durationMin: b.durationMin==null||b.durationMin===""?null:Number(b.durationMin)})),
-    settings: { ...DEFAULT_SETTINGS, ...(res.settings||{}), longBreakLimitMin: Number((res.settings&&res.settings.longBreakLimitMin)||DEFAULT_SETTINGS.longBreakLimitMin) }
+    employees: (res.employees||[]).map(e=>({...e, id:str(e.id), name:str(e.name), role:str(e.role).toLowerCase()==="admin"?"admin":"employee", password:str(e.password) })),
+    breakTypes: (res.breakTypes||[]).map(t=>({...t, id:str(t.id), name:str(t.name), status:str(t.status)||"Active" })),
+    breaks: (res.breaks||[]).map(b=>({...b, id:str(b.id), employeeId:str(b.employeeId), employeeName:str(b.employeeName), breakType:str(b.breakType), status:str(b.status)||"completed", durationMin: b.durationMin==null||b.durationMin===""?null:Number(b.durationMin), date: b.startTime?localDateStr(b.startTime):str(b.date) })),
+    settings: { ...DEFAULT_SETTINGS, ...(res.settings||{}), longBreakLimitMin: Number((res.settings&&res.settings.longBreakLimitMin)||DEFAULT_SETTINGS.longBreakLimitMin), adminPasscode: str((res.settings&&res.settings.adminPasscode)||DEFAULT_SETTINGS.adminPasscode) }
   };
 }
 
@@ -428,6 +468,7 @@ function rangeFor(filter,cs,ce){
   return [sod(now),eod(now)];
 }
 function inRange(rec,start,end){ const t=new Date(rec.startTime); return t>=start&&t<=end; }
+function matchEmp(b,empId,employees){ if(empId==="all") return true; if(String(b.employeeId)===String(empId)) return true; const e=(employees||[]).find(x=>String(x.id)===String(empId)); return !!(e&&b.employeeName===e.name); }
 function computeMetrics(records,now){
   const completed=records.filter(r=>r.status==="completed"&&r.durationMin!=null);
   const active=records.filter(r=>r.status==="active");
@@ -636,11 +677,12 @@ function ExportButtons({getRows,filenameBase,reportOpts}){
 
 /* ---------- breaks table ---------- */
 function StatusBadge({b,now}){
-  const limit=b._limit||30;
-  if(b.status==="active"){ const over=(now-new Date(b.startTime))/60000>limit; return <Badge kind={over?"alert":"busy"}>{over?"Long break":"On break"}</Badge>; }
-  return <Badge kind="slate">Completed</Badge>;
+  if(b.status==="active"){ const over=(now-new Date(b.startTime))/60000>RED_LIMIT; return <Badge kind={over?"alert":"busy"}>{over?"Long break":"On break"}</Badge>; }
+  const over=b.durationMin!=null&&b.durationMin>RED_LIMIT;
+  return <Badge kind={over?"alert":"slate"}>{over?"Over "+RED_LIMIT+" min":"Completed"}</Badge>;
 }
-function LiveDuration({start,now}){ return <span className="mono">{fmtTimer(now-new Date(start))}</span>; }
+function LiveDuration({start,now}){ const over=(now-new Date(start))/60000>RED_LIMIT; return <span className={"mono"+(over?" dur-over":"")}>{fmtTimer(now-new Date(start))}</span>; }
+function Dur({b,now}){ if(b.status==="active") return <LiveDuration start={b.startTime} now={now}/>; const over=b.durationMin!=null&&b.durationMin>RED_LIMIT; return <span className={over?"dur-over":""}>{fmtDuration(b.durationMin)}</span>; }
 function BreaksTable({rows,isAdmin,onView,onEdit,onDelete,now,limit}){
   if(!rows.length) return <Empty icon={I.coffee({width:30,height:30})} title="No breaks found" hint="Adjust the filters or date range above."/>;
   return (
@@ -657,7 +699,7 @@ function BreaksTable({rows,isAdmin,onView,onEdit,onDelete,now,limit}){
               <td>{b.breakType}</td>
               <td className="nums">{fmtTime(b.startTime)}</td>
               <td className="nums">{b.status==="active"?<span className="faint">—</span>:fmtTime(b.endTime)}</td>
-              <td className="nums cell-strong">{b.status==="active"?<LiveDuration start={b.startTime} now={now}/>:fmtDuration(b.durationMin)}</td>
+              <td className="nums cell-strong"><Dur b={b} now={now}/></td>
               <td className="nums faint">{fmtDateShort(b.startTime)}</td>
               <td><StatusBadge b={{...b,_limit:limit}} now={now}/></td>
               <td>
@@ -814,7 +856,7 @@ function Login({state,onLogin,onAddEmployee}){
 
 /* ---------- employee: my break ---------- */
 function MyBreak({state,user,ops,now,notify}){
-  const limit=state.settings.longBreakLimitMin;
+  const limit=RED_LIMIT;
   const active=state.breaks.find(b=>b.employeeId===user.id&&b.status==="active");
   const activeTypes=state.breakTypes.filter(t=>t.status==="Active");
   const [typeId,setTypeId]=useState(activeTypes[0]?activeTypes[0].id:"");
@@ -822,7 +864,7 @@ function MyBreak({state,user,ops,now,notify}){
   useEffect(()=>{ if(!typeId&&activeTypes[0]) setTypeId(activeTypes[0].id); },[activeTypes,typeId]);
 
   const mine=state.breaks.filter(b=>b.employeeId===user.id);
-  const today=mine.filter(b=>b.date===todayStr());
+  const today=mine.filter(b=>localDateStr(b.startTime)===todayStr());
   const m=computeMetrics(today,now);
 
   const start=()=>{
@@ -844,16 +886,25 @@ function MyBreak({state,user,ops,now,notify}){
 
   return (
     <div className="wrap">
-      <div className="sec-head"><div><div className="eyebrow">Your shift</div><h2 className="h2">Hi {user.name.split(" ")[0]} 👋</h2></div></div>
+      <div className="sec-head"><div><div className="eyebrow">Your shift</div><h2 className="h2">Hi {String(user.name).split(" ")[0]} 👋</h2></div></div>
 
       <div className="self-hero">
         {active?(
           <div className={"now-card on"+(over?" over":"")}>
             <div className="now-status"><span className={"dot "+(over?"dot-alert pulse-alert":"dot-busy pulse")}/>{over?"On a long break":"You're on a break"}</div>
-            <div className="now-big mono">{fmtTimer(now-new Date(active.startTime))}</div>
+            <div className="ring-wrap">
+              <svg className="ring" viewBox="0 0 168 168" aria-hidden="true">
+                <circle className="ring-bg" cx="84" cy="84" r="74"/>
+                <circle className={"ring-fg"+(over?" over":"")} cx="84" cy="84" r="74" style={{strokeDasharray:464.9,strokeDashoffset:464.9*(1-Math.min(runningMin/RED_LIMIT,1))}}/>
+              </svg>
+              <div className="ring-center">
+                <div className="now-big mono">{fmtTimer(now-new Date(active.startTime))}</div>
+                <div className="ring-cap">{over?"over "+RED_LIMIT+" min limit":"of "+RED_LIMIT+" min limit"}</div>
+              </div>
+            </div>
             <div className="now-type">{active.breakType}</div>
             <div className="now-sub">Started at {fmtTime(active.startTime)}{active.notes?" · "+active.notes:""}</div>
-            {over&&<div className="banner warn" style={{marginTop:14}}>{I.bell()} You've passed the {limit}-minute limit for this break.</div>}
+            {over&&<div className="banner warn" style={{marginTop:14}}>{I.bell()} You've passed the {RED_LIMIT}-minute limit for this break.</div>}
             <button className="btn lg block" style={{marginTop:18,background:over?"var(--alert)":"var(--ink)",borderColor:"transparent",color:"#fff"}} onClick={end}>{I.stop({stroke:"none"})} End break</button>
           </div>
         ):(
@@ -890,7 +941,7 @@ function MyBreak({state,user,ops,now,notify}){
                 <td className="cell-strong">{b.breakType}</td>
                 <td className="nums">{fmtTime(b.startTime)}</td>
                 <td className="nums">{b.status==="active"?<span className="faint">—</span>:fmtTime(b.endTime)}</td>
-                <td className="nums cell-strong">{b.status==="active"?<LiveDuration start={b.startTime} now={now}/>:fmtDuration(b.durationMin)}</td>
+                <td className="nums cell-strong"><Dur b={b} now={now}/></td>
                 <td><StatusBadge b={{...b,_limit:limit}} now={now}/></td>
               </tr>))}
             </tbody>
@@ -926,9 +977,9 @@ function MyHistory({state,user,now}){
         <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()}/>
         <Stat label="Longest break" value={m.total?fmtDuration(m.longest):"—"} icon={I.flame()} tone="alert"/>
       </div>
-      <div className="panel"><BreaksTable rows={rows} isAdmin={false} onView={setView} now={now} limit={state.settings.longBreakLimitMin}/></div>
+      <div className="panel"><BreaksTable rows={rows} isAdmin={false} onView={setView} now={now} limit={RED_LIMIT}/></div>
       {(()=>{
-        const today=state.breaks.filter(b=>b.employeeId===user.id&&b.date===todayStr()).sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
+        const today=state.breaks.filter(b=>b.employeeId===user.id&&localDateStr(b.startTime)===todayStr()).sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
         return (
           <>
             <div className="sec-head" style={{marginTop:24}}><div><div className="eyebrow">Log</div><h2 className="h2">Today's breaks</h2></div></div>
@@ -941,8 +992,8 @@ function MyHistory({state,user,now}){
                       <td className="cell-strong">{b.breakType}</td>
                       <td className="nums">{fmtTime(b.startTime)}</td>
                       <td className="nums">{b.status==="active"?<span className="faint">—</span>:fmtTime(b.endTime)}</td>
-                      <td className="nums cell-strong">{b.status==="active"?<LiveDuration start={b.startTime} now={now}/>:fmtDuration(b.durationMin)}</td>
-                      <td><StatusBadge b={{...b,_limit:state.settings.longBreakLimitMin}} now={now}/></td>
+                      <td className="nums cell-strong"><Dur b={b} now={now}/></td>
+                      <td><StatusBadge b={{...b,_limit:RED_LIMIT}} now={now}/></td>
                     </tr>))}
                   </tbody>
                 </table></div>
@@ -986,12 +1037,12 @@ function AdminDashboard({state,ops,now}){
   const [cs,setCs]=useState(todayStr()); const [ce,setCe]=useState(todayStr());
   const [empId,setEmpId]=useState("all"); const [typeName,setTypeName]=useState("all");
   const [view,setView]=useState(null);
-  const limit=state.settings.longBreakLimitMin;
+  const limit=RED_LIMIT;
   const cmap=useMemo(()=>typeColorMap(state.breakTypes),[state.breakTypes]);
   const [start,end]=rangeFor(filter,cs,ce);
   const workforce=state.employees.filter(e=>e.role==="employee");
 
-  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
+  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(matchEmp(b,empId,state.employees))&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
   const m=computeMetrics(ranged,now);
   const liveActive=useMemo(()=>state.breaks.filter(b=>b.status==="active").sort((a,b)=>new Date(a.startTime)-new Date(b.startTime)),[state.breaks]);
   const onBreakIds=new Set(liveActive.map(b=>b.employeeId));
@@ -1000,7 +1051,7 @@ function AdminDashboard({state,ops,now}){
 
   const dist=useMemo(()=>groupBy(ranged,b=>b.breakType).map((g,i)=>({label:g.label,value:g.count,minutes:g.minutes,color:colorFor(cmap,g.label,i)})),[ranged,cmap]);
   const trend=useMemo(()=>trendByDay(ranged,start,end),[ranged,start,end]);
-  const byEmp=useMemo(()=>groupBy(ranged,b=>b.employeeName).slice(0,8).map(g=>({label:g.label.split(" ")[0],value:g.count})),[ranged]);
+  const byEmp=useMemo(()=>groupBy(ranged,b=>b.employeeName).slice(0,8).map(g=>({label:String(g.label).split(" ")[0],value:g.count})),[ranged]);
   const mostUsed=dist[0]?dist[0].label:"—";
 
   const events=useMemo(()=>{
@@ -1017,6 +1068,13 @@ function AdminDashboard({state,ops,now}){
     <div className="wrap">
       <div className="sec-head"><div><div className="eyebrow">Live overview</div><h2 className="h2">Department dashboard</h2></div>
         <div className="row-flex">{onBreak>0?<Badge kind="busy"><span className="dot dot-busy"/> {onBreak} on break now</Badge>:<Badge kind="free"><span className="dot dot-free"/> All available</Badge>}</div>
+      </div>
+
+      <div className="hero-strip">
+        <div className="hero-cell busy"><div className="hero-k">{onBreak}</div><div className="hero-l"><span className="dot dot-busy"/> On break now</div></div>
+        <div className="hero-cell free"><div className="hero-k">{available}</div><div className="hero-l"><span className="dot dot-free"/> Available</div></div>
+        <div className="hero-cell"><div className="hero-k">{m.total}</div><div className="hero-l">Breaks · {lbl}</div></div>
+        <div className="hero-cell"><div className="hero-k">{fmtDuration(m.totalMin)}</div><div className="hero-l">Total break time</div></div>
       </div>
 
       <FilterBar filter={filter} setFilter={setFilter} cs={cs} setCs={setCs} ce={ce} setCe={setCe}
@@ -1171,16 +1229,14 @@ function TeamView({state,ops,notify}){
   const [editEmp,setEditEmp]=useState(null);
   const [newEmp,setNewEmp]=useState(false);
   const [delEmp,setDelEmp]=useState(null);
-  const [limit,setLimit]=useState(String(state.settings.longBreakLimitMin));
   const [passcode,setPasscode]=useState(state.settings.adminPasscode);
-  useEffect(()=>{ setLimit(String(state.settings.longBreakLimitMin)); setPasscode(state.settings.adminPasscode); },[state.settings.longBreakLimitMin,state.settings.adminPasscode]);
+  useEffect(()=>{ setPasscode(state.settings.adminPasscode); },[state.settings.adminPasscode]);
   const saveEmp=(emp)=>{ ops.op("saveEmployee",[emp],{action:"saveEmployee",employee:emp}); notify("Team member saved — "+emp.name,"info"); };
   const removeEmp=(emp)=>{ ops.op("deleteEmployee",[emp.id],{action:"deleteEmployee",id:emp.id}); notify("Team member removed","info"); };
   const saveCfg=()=>{
-    const n=Math.max(1,parseInt(limit,10)||30);
-    const st={ longBreakLimitMin:n, adminPasscode:(passcode||"admin").trim()||"admin" };
+    const st={ longBreakLimitMin:RED_LIMIT, adminPasscode:(passcode||"admin").trim()||"admin" };
     ops.op("saveSettings",[st],{action:"saveSettings",settings:st});
-    notify("Settings updated","end","Long-break limit "+n+" min");
+    notify("Settings saved","end");
   };
   const team=state.employees;
   const emps=team.filter(e=>e.role==="employee");
@@ -1218,14 +1274,10 @@ function TeamView({state,ops,notify}){
 
       <div className="sec-head" style={{marginTop:26}}><div><div className="eyebrow">Rules</div><h2 className="h2">Settings</h2></div></div>
       <div className="panel panel-pad" style={{maxWidth:560}}>
-        <div className="form-grid">
-          <div className="field"><label className="label">Long break alert (minutes)</label>
-            <input className="input" type="number" min="1" value={limit} onChange={e=>setLimit(e.target.value)}/>
-            <span className="faint" style={{fontSize:12}}>Breaks longer than this raise a long-break alert.</span></div>
-          <div className="field"><label className="label">Admin passcode</label>
-            <input className="input" value={passcode} onChange={e=>setPasscode(e.target.value)} placeholder="admin"/>
-            <span className="faint" style={{fontSize:12}}>Used on the Admin login.</span></div>
-        </div>
+        <div className="rule-note">{I.flame({width:16,height:16})}<span>Any single break longer than <b>{RED_LIMIT} minutes</b> is automatically flagged <span className="red-word">red</span> everywhere in the app.</span></div>
+        <div className="field" style={{marginTop:14}}><label className="label">Admin passcode</label>
+          <input className="input" value={passcode} onChange={e=>setPasscode(e.target.value)} placeholder="admin"/>
+          <span className="faint" style={{fontSize:12}}>Shared key for the Admin login. Personal admin passwords are set per member above.</span></div>
         <button className="btn primary" style={{marginTop:16}} onClick={saveCfg}>Save settings</button>
       </div>
 
@@ -1244,11 +1296,11 @@ function AdminHistory({state,ops,now}){
   const [empId,setEmpId]=useState("all"); const [typeName,setTypeName]=useState("all");
   const [search,setSearch]=useState("");
   const [view,setView]=useState(null); const [edit,setEdit]=useState(null); const [del,setDel]=useState(null);
-  const limit=state.settings.longBreakLimitMin;
+  const limit=RED_LIMIT;
   const workforce=state.employees.filter(e=>e.role==="employee");
   const [start,end]=rangeFor(filter,cs,ce);
   const rows=useMemo(()=>{
-    let r=state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName));
+    let r=state.breaks.filter(b=>inRange(b,start,end)&&(matchEmp(b,empId,state.employees))&&(typeName==="all"||b.breakType===typeName));
     if(search.trim()){ const q=search.toLowerCase(); r=r.filter(b=>(b.employeeName+" "+b.breakType+" "+(b.notes||"")).toLowerCase().includes(q)); }
     return r.sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
   },[state.breaks,start,end,empId,typeName,search]);
@@ -1287,13 +1339,13 @@ function AdminReports({state,now}){
   const cmap=useMemo(()=>typeColorMap(state.breakTypes),[state.breakTypes]);
   const workforce=state.employees.filter(e=>e.role==="employee");
   const [start,end]=rangeFor(filter,cs,ce);
-  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
+  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(matchEmp(b,empId,state.employees))&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
   const m=computeMetrics(ranged,now);
   const byType=useMemo(()=>groupBy(ranged,b=>b.breakType),[ranged]);
   const byEmp=useMemo(()=>groupBy(ranged,b=>b.employeeName),[ranged]);
   const trend=useMemo(()=>trendByDay(ranged,start,end),[ranged,start,end]);
   const dist=byType.map((g,i)=>({label:g.label,value:g.count,minutes:g.minutes,color:colorFor(cmap,g.label,i)}));
-  const empBars=byEmp.slice(0,10).map(g=>({label:g.label.split(" ")[0],value:g.count}));
+  const empBars=byEmp.slice(0,10).map(g=>({label:String(g.label).split(" ")[0],value:g.count}));
   const avgByType=byType.slice(0,10).map(g=>({label:g.label,value:g.count?Math.round(g.minutes/g.count):0}));
   const mostUsed=byType[0]?byType[0].label:"—";
   const lbl=RANGE_LABEL[filter];
@@ -1454,7 +1506,7 @@ function App(){
   // long-break alert — fires once per active break that crosses the limit
   useEffect(()=>{
     if(!state) return;
-    const limit=state.settings.longBreakLimitMin;
+    const limit=RED_LIMIT;
     state.breaks.forEach(b=>{
       if(b.status==="active"){
         const mins=(now-new Date(b.startTime))/60000;
