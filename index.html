@@ -325,17 +325,33 @@ function jsonbinHeaders(write){
 }
 
 // apps_script keeps its action-based backend (server applies + returns full db)
+function parseAppsResponse(text){
+  let data;
+  try { data = JSON.parse(text); }
+  catch(e){
+    // Apps Script returns an HTML login/error page instead of JSON when the
+    // Web app deployment isn't public or wasn't deployed correctly.
+    const looksLikeLogin = /sign in|accounts\.google|requires? (authoriz|access)|<\!?html/i.test(text);
+    throw new Error(looksLikeLogin
+      ? "Apps Script deployment is not public — set Who-has-access to \"Anyone\" and redeploy."
+      : "Apps Script did not return JSON.");
+  }
+  if (data && data.error) throw new Error("Apps Script error: " + data.error);
+  return normalizeDb(data);
+}
 async function appsGet(){
-  const res = await fetch(APPS_SCRIPT_URL, { method:"GET" });
-  return normalizeDb(await res.json());
+  const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
+  const res = await fetch(url, { method:"GET", redirect:"follow" });
+  return parseAppsResponse(await res.text());
 }
 async function appsPost(action, payload){
   const res = await fetch(APPS_SCRIPT_URL, {
     method:"POST",
-    headers: { "Content-Type":"text/plain;charset=utf-8" },
+    redirect:"follow",
+    headers: { "Content-Type":"text/plain;charset=utf-8" }, // text/plain = no CORS preflight
     body: JSON.stringify({ action, payload }),
   });
-  return normalizeDb(await res.json());
+  return parseAppsResponse(await res.text());
 }
 
 const Cloud = {
@@ -669,10 +685,13 @@ function LoginScreen({ db, onLogin, theme, toggleTheme }){
   const [err, setErr] = useState("");
 
   const submit = () => {
-    const e = db.employees.find(x => x.empId.toLowerCase() === empId.trim().toLowerCase());
+    const idIn = empId.trim().toLowerCase();
+    const e = db.employees.find(x => String(x.empId).trim().toLowerCase() === idIn);
     if (!e){ setErr("Employee ID not found."); return; }
     if (e.status !== "Active"){ setErr("This account is deactivated."); return; }
-    if (String(e.pin) !== pin.trim()){ setErr("Incorrect PIN."); return; }
+    const stored = String(e.pin).trim(), entered = pin.trim();
+    const numMatch = stored !== "" && entered !== "" && !isNaN(Number(stored)) && !isNaN(Number(entered)) && Number(stored) === Number(entered);
+    if (stored !== entered && !numMatch){ setErr("Incorrect PIN."); return; }
     setErr(""); onLogin(e);
   };
 
@@ -1341,6 +1360,10 @@ function App(){
   const [section, setSection] = useState("dashboard");
   const [, tick] = useState(0);
   const [syncErr, setSyncErr] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [sheetEmpty, setSheetEmpty] = useState(false);
+  const failSync = (e) => { setSyncErr(true); setSyncMsg(e && e.message ? e.message : ""); };
+  const okSync = () => { setSyncErr(false); setSyncMsg(""); };
   const [loading, setLoading] = useState(true);
   const dbRef = useRef(null);     // always-current db for deterministic writes
   const busyRef = useRef(false);  // pause poll while a write is in flight
@@ -1357,13 +1380,15 @@ function App(){
     if (isCloud()){
       try {
         let data = await Cloud.load();
-        if (!data){                       // empty cloud store → seed it once
+        const notSeeded = !data || !Array.isArray(data.employees) || data.employees.length === 0;
+        if (notSeeded){                   // empty store / sheet → seed so login works
           const seeded = seedDb();
-          if (MODE !== "apps_script") await Cloud.save(seeded);
+          if (MODE !== "apps_script") { await Cloud.save(seeded); }
+          else { setSheetEmpty(true); }   // Sheets: prompt user to run setup() to persist
           data = seeded;
-        }
-        setDbBoth(data); setSyncErr(false); setLoading(false); return;
-      } catch(e){ setSyncErr(true); }     // fall back to local copy on failure
+        } else { setSheetEmpty(false); }
+        setDbBoth(data); okSync(); setLoading(false); return;
+      } catch(e){ failSync(e); }     // fall back to local copy on failure
     }
     const raw = safeStore.get(STORE_KEY);
     if (raw){ try { setDbBoth(JSON.parse(raw)); setLoading(false); return; } catch(e){} }
@@ -1381,8 +1406,8 @@ function App(){
     if (!isCloud()) return;
     const t = setInterval(async () => {
       if (busyRef.current) return;       // don't clobber an in-flight local write
-      try { const data = await Cloud.load(); if (data){ setDbBoth(data); setSyncErr(false); } }
-      catch(e){ setSyncErr(true); }
+      try { const data = await Cloud.load(); if (data){ setDbBoth(data); okSync(); } }
+      catch(e){ failSync(e); }
     }, REFRESH_MS);
     return () => clearInterval(t);
   }, []);
@@ -1403,8 +1428,8 @@ function App(){
       } else {
         await Cloud.save(next);            // blob stores: push whole db
       }
-      setSyncErr(false);
-    } catch(e){ setSyncErr(true); }
+      okSync();
+    } catch(e){ failSync(e); }
     finally { busyRef.current = false; }
   }, []);
 
@@ -1466,7 +1491,8 @@ function App(){
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-        {syncErr && <div className="mb-4 text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-lg px-3 py-2">Couldn't reach the {MODE_LABEL} store — showing the last data fetched. Check your credentials / deployment in the config block.</div>}
+        {syncErr && <div className="mb-4 text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-lg px-3 py-2">Couldn't reach the {MODE_LABEL} store — showing the last data fetched.{syncMsg ? " " + syncMsg : " Check your credentials / deployment in the config block."}</div>}
+        {sheetEmpty && !syncErr && <div className="mb-4 text-sm bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 rounded-lg px-3 py-2">Connected to Google Sheets, but the sheet is empty. Run <span className="font-mono font-semibold">setup</span> once in Apps Script (Run ▸ setup) to create the tabs and seed data. You're viewing seed data locally until then.</div>}
         {user.role==="Employee" && <EmployeeView db={db} user={user} dispatch={dispatch} theme={theme} />}
         {user.role==="Admin" && <AdminView db={db} dispatch={dispatch} theme={theme} section={curSection} setSection={setSection} />}
         {user.role==="TeamLead" && <TeamLeadView db={db} user={user} theme={theme} section={curSection} />}
