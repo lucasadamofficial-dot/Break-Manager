@@ -3,617 +3,669 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Break Management & Reporting</title>
-
-<!-- React + Babel + Tailwind + Chart.js + export libs -->
+<title>Break Board — Ecommerce</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-
-<script>
-  tailwind.config = {
-    darkMode: 'class',
-    theme: {
-      extend: {
-        fontFamily: {
-          sans: ['Inter', 'system-ui', 'sans-serif'],
-          display: ['Space Grotesk', 'Inter', 'sans-serif'],
-          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-        },
-      },
-    },
-  };
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: 'Inter', system-ui, sans-serif; }
-  .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
-  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-  .tnum { font-variant-numeric: tabular-nums; }
-  ::-webkit-scrollbar { height: 8px; width: 8px; }
-  ::-webkit-scrollbar-thumb { background: rgba(100,116,139,.4); border-radius: 8px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  @keyframes pulsering { 0%{box-shadow:0 0 0 0 rgba(245,158,11,.45)} 70%{box-shadow:0 0 0 12px rgba(245,158,11,0)} 100%{box-shadow:0 0 0 0 rgba(245,158,11,0)} }
-  .pulse-amber { animation: pulsering 2s infinite; }
-  @keyframes pulseringred { 0%{box-shadow:0 0 0 0 rgba(244,63,94,.5)} 70%{box-shadow:0 0 0 12px rgba(244,63,94,0)} 100%{box-shadow:0 0 0 0 rgba(244,63,94,0)} }
-  .pulse-red { animation: pulseringred 1.4s infinite; }
-  .dot { width:8px;height:8px;border-radius:50%;display:inline-block; }
-  @media print {
-    .no-print { display:none !important; }
-    body { background:#fff !important; }
-  }
-  [type="number"]::-webkit-inner-spin-button { opacity:1; }
+:root{
+  --ink:#0f1722; --ink-2:#18202d; --line:#e6e9f0; --line-2:#eef1f6;
+  --bg:#f4f6fa; --card:#ffffff; --txt:#0f1722; --muted:#5b6675; --faint:#8a93a3;
+  --accent:#4338ca; --accent-2:#eef0ff; --accent-ink:#312e9e;
+  --busy:#b45309; --busy-bg:#fef3c7; --busy-line:#fde68a;
+  --free:#047857; --free-bg:#d1fae5; --free-line:#a7f3d0;
+  --alert:#be123c; --alert-bg:#ffe4e6; --alert-line:#fecdd3;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(15,23,34,.04),0 4px 16px rgba(15,23,34,.05);
+  --shadow-lg:0 12px 40px rgba(15,23,34,.16);
+  --r:14px; --r-sm:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+#root{min-height:100vh}
+button{font-family:inherit}
+.nums{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* loading / boot */
+.boot{min-height:100vh;display:grid;place-items:center;color:var(--muted)}
+
+/* topbar */
+.topbar{position:sticky;top:0;z-index:30;background:var(--ink);color:#fff;border-bottom:1px solid #000}
+.topbar-in{max-width:1280px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand-badge{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:grid;place-items:center;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.brand-badge svg{display:block}
+.brand-name{font-weight:750;letter-spacing:-.01em;font-size:15px;line-height:1.1}
+.brand-sub{font-size:11px;color:#9aa6bd;letter-spacing:.02em}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.top-clock{font-family:var(--mono);font-size:13px;color:#cfd6e6;display:flex;align-items:center;gap:8px}
+.top-clock .lp{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pulse 2.2s infinite}
+.top-user{display:flex;align-items:center;gap:10px}
+.uav{width:30px;height:30px;border-radius:50%;background:#2a3445;display:grid;place-items:center;font-weight:700;font-size:12px;color:#cdd5e6;flex:none}
+.user-name{font-weight:650;font-size:13px;line-height:1.1}
+.user-role{font-size:11px;color:#9aa6bd;text-transform:capitalize}
+
+/* tabs */
+.tabs{max-width:1280px;margin:0 auto;padding:0 20px;display:flex;gap:4px;overflow-x:auto}
+.tab{appearance:none;border:0;background:transparent;color:var(--muted);padding:13px 14px;font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;letter-spacing:-.005em}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.tabwrap{background:#fff;border-bottom:1px solid var(--line)}
+
+/* layout */
+.wrap{max-width:1280px;margin:0 auto;padding:22px 20px 64px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+.h2{font-size:18px;font-weight:750;letter-spacing:-.02em;margin:2px 0 0}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:26px 0 12px}
+.sec-head:first-child{margin-top:0}
+
+/* cards / panels */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;border-bottom:1px solid var(--line-2)}
+.panel-title{font-weight:700;font-size:14.5px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+.panel-body{padding:16px 17px}
+.panel-pad{padding:17px}
+
+/* stats grid */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform .15s ease,box-shadow .15s ease}
+.stat:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.stat-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.stat-label{font-size:11.5px;font-weight:650;color:var(--muted);letter-spacing:.01em}
+.stat-ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--accent-2);color:var(--accent-ink);flex:none}
+.stat-ic.busy{background:var(--busy-bg);color:var(--busy)}
+.stat-ic.free{background:var(--free-bg);color:var(--free)}
+.stat-ic.alert{background:var(--alert-bg);color:var(--alert)}
+.stat-value{font-size:27px;font-weight:780;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.stat-sub{font-size:11.5px;color:var(--faint);margin-top:6px}
+.stat-unit{font-size:14px;font-weight:600;color:var(--muted);margin-left:3px}
+
+/* live board (signature) */
+.live{display:flex;flex-direction:column}
+.live-row{display:flex;align-items:center;gap:13px;padding:13px 17px;border-top:1px solid var(--line-2)}
+.live-row:first-child{border-top:0}
+.live-row.over{background:linear-gradient(90deg,var(--alert-bg),transparent 60%)}
+.av{width:36px;height:36px;border-radius:50%;background:#eef1f6;display:grid;place-items:center;font-weight:700;font-size:13px;color:#4a5568;flex:none}
+.live-main{min-width:0;flex:1}
+.live-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.live-meta{font-size:12px;color:var(--muted);margin-top:1px}
+.live-time{text-align:right;flex:none}
+.timer{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.timer.over{color:var(--alert)}
+.since{font-size:11px;color:var(--faint);margin-top:2px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.dot-busy{background:var(--busy)}
+.dot-free{background:var(--free)}
+.dot-alert{background:var(--alert)}
+.pulse{animation:pulse-amber 2.2s infinite}
+.pulse-alert{animation:pulse-rose 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+@keyframes pulse-amber{0%{box-shadow:0 0 0 0 rgba(180,83,9,.5)}70%{box-shadow:0 0 0 7px rgba(180,83,9,0)}100%{box-shadow:0 0 0 0 rgba(180,83,9,0)}}
+@keyframes pulse-rose{0%{box-shadow:0 0 0 0 rgba(190,18,60,.55)}70%{box-shadow:0 0 0 7px rgba(190,18,60,0)}100%{box-shadow:0 0 0 0 rgba(190,18,60,0)}}
+
+/* badges */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:650;border:1px solid transparent;white-space:nowrap}
+.badge-busy{background:var(--busy-bg);color:var(--busy);border-color:var(--busy-line)}
+.badge-free{background:var(--free-bg);color:var(--free);border-color:var(--free-line)}
+.badge-alert{background:var(--alert-bg);color:var(--alert);border-color:var(--alert-line)}
+.badge-slate{background:#eef1f6;color:#475569;border-color:#e2e8f0}
+.badge-accent{background:var(--accent-2);color:var(--accent-ink);border-color:#dcdcfb}
+.badge-off{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
+
+/* buttons */
+.btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--txt);padding:9px 14px;border-radius:var(--r-sm);font-size:13.5px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .12s ease,border-color .12s ease,transform .08s ease;line-height:1}
+.btn:hover{background:#f7f8fb}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#3a31b3}
+.btn.danger{background:#fff;border-color:var(--alert-line);color:var(--alert)}
+.btn.danger:hover{background:var(--alert-bg)}
+.btn.subtle{background:#f1f3f8;border-color:transparent}
+.btn.subtle:hover{background:#e9ecf4}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{background:#f1f3f8;color:var(--txt)}
+.btn.lg{padding:13px 20px;font-size:15px;border-radius:12px}
+.btn.sm{padding:6px 10px;font-size:12.5px}
+.btn.block{width:100%;justify-content:center}
+.icon-btn{appearance:none;border:1px solid var(--line);background:#fff;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+.icon-btn:hover{background:#f7f8fb;color:var(--txt)}
+.icon-btn.danger:hover{color:var(--alert);border-color:var(--alert-line);background:var(--alert-bg)}
+
+/* forms */
+.field{display:flex;flex-direction:column;gap:6px}
+.label{font-size:12.5px;font-weight:650;color:var(--muted)}
+.input,.select,.textarea{appearance:none;width:100%;border:1px solid var(--line);background:#fff;border-radius:var(--r-sm);padding:10px 12px;font-size:14px;color:var(--txt);font-family:inherit;transition:border-color .12s ease,box-shadow .12s ease}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(67,56,202,.12)}
+.textarea{resize:vertical;min-height:74px;line-height:1.45}
+.select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b6675' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:32px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+/* tables */
+.table-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);padding:11px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fbfcfe;white-space:nowrap}
+.tbl td{padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr:hover{background:#fbfcff}
+.cell-strong{font-weight:650}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+
+/* filter bar */
+.filterbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.chip-row{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:11px;padding:3px;gap:2px;box-shadow:var(--shadow)}
+.chip{appearance:none;border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.chip:hover{color:var(--txt)}
+.chip.active{background:var(--ink);color:#fff}
+.fsel{min-width:150px}
+.fsel .select{padding:8px 30px 8px 11px;font-size:13px;box-shadow:var(--shadow)}
+.fdate{display:flex;align-items:center;gap:6px}
+.fdate .input{padding:8px 10px;font-size:13px;box-shadow:var(--shadow)}
+.search{position:relative;flex:1;min-width:200px}
+.search .input{padding-left:36px;box-shadow:var(--shadow)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint)}
+.spacer{flex:1}
+
+/* grids */
+.grid{display:grid;gap:14px}
+.g-2{grid-template-columns:1fr 1fr}
+.g-3{grid-template-columns:1.3fr 1fr 1fr}
+.dash-2{grid-template-columns:1.35fr 1fr}
+.rep-2{grid-template-columns:1fr 1fr}
+
+/* charts */
+.legend{display:flex;flex-direction:column;gap:8px}
+.legend-item{display:flex;align-items:center;gap:9px;font-size:13px}
+.swatch{width:11px;height:11px;border-radius:3px;flex:none}
+.legend-val{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt)}
+.legend-pct{font-size:11.5px;color:var(--faint);width:42px;text-align:right}
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.donut-center{font-weight:780;font-size:22px;letter-spacing:-.03em}
+.bars{display:flex;align-items:flex-end;gap:9px;height:170px;padding-top:8px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.bar-track{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.bar{width:60%;max-width:34px;min-width:8px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#6366f1,#4338ca);transition:height .3s ease}
+.bar.alt{background:linear-gradient(180deg,#34d399,#059669)}
+.bar-lbl{font-size:10.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}
+.bar-val{font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* recent activity */
+.feed{display:flex;flex-direction:column}
+.feed-row{display:flex;gap:12px;padding:12px 17px;border-top:1px solid var(--line-2)}
+.feed-row:first-child{border-top:0}
+.feed-ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+.feed-ic.start{background:var(--busy-bg);color:var(--busy)}
+.feed-ic.end{background:var(--free-bg);color:var(--free)}
+.feed-txt{font-size:13px;min-width:0}
+.feed-name{font-weight:650}
+.feed-time{font-size:11.5px;color:var(--faint);margin-left:auto;white-space:nowrap}
+
+/* empty */
+.empty{text-align:center;padding:40px 20px;color:var(--faint)}
+.empty svg{margin-bottom:10px;color:#cbd2dd}
+.empty-t{font-weight:650;color:var(--muted);font-size:14px}
+
+/* employee self panel */
+.self-hero{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+.now-card{border-radius:var(--r);padding:22px;border:1px solid var(--line);box-shadow:var(--shadow);background:#fff}
+.now-card.on{background:linear-gradient(135deg,#fffbeb,#fff);border-color:var(--busy-line)}
+.now-card.on.over{background:linear-gradient(135deg,#fff1f2,#fff);border-color:var(--alert-line)}
+.now-status{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px}
+.now-big{font-size:40px;font-weight:800;letter-spacing:-.03em;margin:14px 0 4px;font-variant-numeric:tabular-nums}
+.now-type{font-size:15px;font-weight:700}
+.now-sub{color:var(--muted);font-size:13px;margin-top:2px}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(15,23,34,.42);backdrop-filter:blur(2px);z-index:60;display:grid;place-items:center;padding:20px;animation:fade .15s ease}
+.modal{background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);width:100%;max-width:480px;max-height:90vh;overflow:auto;animation:pop .16s cubic-bezier(.16,1,.3,1)}
+.modal.wide{max-width:680px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--line-2)}
+.modal-title{font-weight:750;font-size:16px;letter-spacing:-.01em}
+.modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--line-2);display:flex;justify-content:flex-end;gap:10px}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+
+/* toasts */
+.toasts{position:fixed;top:16px;right:16px;z-index:90;display:flex;flex-direction:column;gap:10px;max-width:340px}
+.toast{background:var(--ink);color:#fff;border-radius:12px;padding:12px 14px;box-shadow:var(--shadow-lg);display:flex;gap:11px;align-items:flex-start;animation:slidein .22s cubic-bezier(.16,1,.3,1)}
+.toast-ic{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none;margin-top:1px}
+.toast.start .toast-ic{background:rgba(180,83,9,.25);color:#fcd34d}
+.toast.end .toast-ic{background:rgba(4,120,87,.3);color:#6ee7b7}
+.toast.alert{background:#7f1d2e}
+.toast.alert .toast-ic{background:rgba(255,255,255,.18);color:#fecdd3}
+.toast.info .toast-ic{background:rgba(99,102,241,.3);color:#c7d2fe}
+.toast-t{font-weight:650;font-size:13.5px;line-height:1.3}
+.toast-d{font-size:12px;color:#b9c2d4;margin-top:2px}
+@keyframes slidein{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+
+/* login */
+.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(1200px 600px at 50% -10%,#1b2433,#0f1722)}
+.login-card{width:100%;max-width:420px;background:#fff;border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden}
+.login-top{padding:30px 30px 22px;text-align:center;border-bottom:1px solid var(--line-2)}
+.login-badge{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:grid;place-items:center;margin:0 auto 14px;box-shadow:0 8px 24px rgba(79,70,229,.4)}
+.login-title{font-size:21px;font-weight:800;letter-spacing:-.02em}
+.login-sub{color:var(--muted);font-size:13px;margin-top:4px}
+.login-body{padding:24px 30px 30px;display:flex;flex-direction:column;gap:16px}
+.seg{display:flex;background:#f1f3f8;border-radius:11px;padding:4px;gap:4px}
+.seg-btn{flex:1;appearance:none;border:0;background:transparent;padding:9px;border-radius:8px;font-weight:650;font-size:13.5px;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.seg-btn.active{background:#fff;color:var(--accent-ink);box-shadow:var(--shadow)}
+.login-foot{text-align:center;font-size:11.5px;color:var(--faint);margin-top:2px}
+.hint{font-size:12px;color:var(--faint);background:#f8fafc;border:1px dashed var(--line);border-radius:9px;padding:9px 11px}
+
+/* misc */
+.row-flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mt0{margin-top:0}
+.bt-meta{display:flex;flex-direction:column}
+.note-cell{max-width:240px;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner{display:flex;align-items:center;gap:10px;background:var(--accent-2);border:1px solid #dcdcfb;color:var(--accent-ink);padding:10px 14px;border-radius:11px;font-size:13px;font-weight:550}
+.banner.warn{background:#fffbeb;border-color:var(--busy-line);color:#92400e}
+
+@media (max-width:980px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .dash-2,.g-2,.g-3,.rep-2,.self-hero{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .wrap{padding:18px 14px 56px}
+  .topbar-in{padding:11px 14px}
+  .tabs{padding:0 14px}
+  .now-big{font-size:34px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
 </style>
 </head>
-<body class="bg-slate-100 dark:bg-[#0B1220] text-slate-800 dark:text-slate-100 antialiased">
-<div id="root"></div>
-
+<body>
+<div id="root"><div class="boot">Loading Break Board…</div></div>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef, useMemo, useCallback } = React;
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
 /* ============================================================
-   STORAGE CONFIG — choose where data is stored.
-   Set STORAGE_MODE to ONE of:
-     "local"        → this browser only (no setup; clears on cache wipe)
-     "apps_script"  → Google Sheets via Apps Script   (set APPS_SCRIPT_URL)
-     "supabase"     → Supabase Postgres               (set SUPABASE_*)
-     "firebase"     → Firebase Firestore              (set FIREBASE_CONFIG)
-     "jsonbin"      → JSONBin.io cloud JSON           (set JSONBIN_*)
-   Step-by-step setup for every option is in the comment block
-   at the very bottom of this file.
+   CONFIG — paste your Google Apps Script Web App /exec URL here
+   to enable real-time cross-device sync. Leave blank to run on
+   this device only (browser storage).
    ============================================================ */
-const STORAGE_MODE = "apps_script";
+const BACKEND_URL = ""; // e.g. "https://script.google.com/macros/s/AKfyc.../exec"
+const LS_KEY = "bmt_ecom_v1";
+const DEPARTMENT = "Ecommerce";
 
-/* 1) Google Apps Script (Sheets) — ACTIVE. Deploy the .gs on your sheet,
-      then paste the Web app /exec URL below. Sheet:
-      https://docs.google.com/spreadsheets/d/1gtVboWcy9xGs1vXhDZZVEGGyTqSQCFR8OpKd1Mwg7r8/edit */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzTHDnTli5TbpXJtkdHFUyrmyhZvTd69alml8BqXTKPnAy40VE_nP6Ow4dohdRK7XTtYQ/exec";
-
-/* 2) Supabase — table:  app_state ( id text primary key, data jsonb ) */
-const SUPABASE_URL      = ""; // "https://xxxxx.supabase.co"
-const SUPABASE_ANON_KEY = ""; // Project Settings → API → anon public key
-const SUPABASE_TABLE    = "app_state";
-
-/* 3) Firebase — create a Web app + enable Firestore, paste the config */
-const FIREBASE_CONFIG = { apiKey:"", authDomain:"", projectId:"", appId:"" };
-
-/* 4) JSONBin.io — create a private bin, copy its Bin ID + Master Key */
-const JSONBIN_BIN_ID = "";
-const JSONBIN_KEY    = "";
-
-const REFRESH_MS = 30000;
-const STORE_KEY  = "break_mgmt_db_v1";
-const CLOUD_ID   = "main"; // row/doc id used by the cloud stores
-
-/* active mode helpers */
-const MODE       = STORAGE_MODE;
-const isCloud    = () => MODE !== "local";
-const MODE_LABEL = ({ local:"local", apps_script:"Google Sheets", supabase:"Supabase", firebase:"Firebase", jsonbin:"JSONBin" })[MODE] || MODE;
-
-/* ---------------- safe storage (won't crash in sandbox) ------- */
-const safeStore = {
-  get(k){ try { return window.localStorage.getItem(k); } catch(e){ return null; } },
-  set(k,v){ try { window.localStorage.setItem(k,v); } catch(e){} },
-};
-
-/* ---------------- helpers ------------------------------------ */
-const uid = (p="id") => p + "_" + Date.now().toString(36) + "_" + Math.floor(Math.random()*1e4);
-const clone = (o) => JSON.parse(JSON.stringify(o));
-const pad = (n) => String(n).padStart(2,"0");
-
-function dateStr(d){ const x = new Date(d); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); }
-const todayStr = () => dateStr(new Date());
-
-function fmtClock(secs){
-  secs = Math.max(0, Math.floor(secs));
-  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
-  return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-function fmtMins(mins){
-  mins = Math.round(mins||0);
-  if (mins < 60) return mins + "m";
-  const h = Math.floor(mins/60), m = mins%60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-function fmtTime(iso){ if(!iso) return "—"; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
-function fmtDay(d){ return new Date(d).toLocaleDateString([], {month:"short", day:"numeric"}); }
-function weekKey(d){
-  const x = new Date(d); x.setHours(0,0,0,0);
-  const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); // Monday start
-  return dateStr(x);
-}
-function monthKey(d){ const x = new Date(d); return x.getFullYear()+"-"+pad(x.getMonth()+1); }
-
-// minutes attributed to a record (live elapsed if ongoing)
-function recMins(r, now){
-  const start = new Date(r.startTime).getTime();
-  const end = r.endTime ? new Date(r.endTime).getTime() : now;
-  return Math.max(0, (end - start)/60000);
-}
-function isExceeded(r, now){
-  if (!r.maxMinutes) return false;
-  return recMins(r, now) > r.maxMinutes;
-}
-
-/* ---------------- seed data ---------------------------------- */
+/* ---------- defaults / seed ---------- */
+const uid = (p) => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const DEFAULT_BREAK_TYPES = [
-  { name:"Tea Break", maxMinutes:15, color:"#10B981" },
-  { name:"Lunch Break", maxMinutes:45, color:"#6366F1" },
-  { name:"Prayer (Namaz)", maxMinutes:20, color:"#22D3EE" },
-  { name:"Phone Call", maxMinutes:10, color:"#F59E0B" },
-  { name:"Washroom", maxMinutes:8, color:"#A78BFA" },
-  { name:"Meeting", maxMinutes:30, color:"#0EA5E9" },
-  { name:"Personal Break", maxMinutes:15, color:"#F472B6" },
-  { name:"Emergency", maxMinutes:30, color:"#F43F5E" },
-  { name:"Other", maxMinutes:15, color:"#94A3B8" },
-].map(b => ({ id: uid("bt"), active:true, ...b }));
+  ["Lunch Break","Midday meal break"],["Tea Break","Short refreshment break"],
+  ["Prayer (Namaz)","Time for prayer"],["Personal Break","Personal time away"],
+  ["Meeting","Internal or client meeting"],["Phone Call","Work-related call"],
+  ["Emergency","Urgent matter"],["Other","Unspecified break"]
+].map(([name,description]) => ({ id: uid("bt"), name, description, status:"Active" }));
 
-function seedEmployees(){
-  return [
-    { id:uid("emp"), empId:"ADMIN", name:"System Admin", department:"Management", designation:"Administrator", teamLead:"", email:"admin@company.com", phone:"", role:"Admin", pin:"1234", status:"Active" },
-    { id:uid("emp"), empId:"LEAD-OPS", name:"Omar Farooq", department:"Operations", designation:"Team Lead", teamLead:"", email:"omar@company.com", phone:"", role:"TeamLead", pin:"1111", status:"Active" },
-    { id:uid("emp"), empId:"LEAD-SUP", name:"Hina Raza", department:"Support", designation:"Team Lead", teamLead:"", email:"hina@company.com", phone:"", role:"TeamLead", pin:"2222", status:"Active" },
-    { id:uid("emp"), empId:"EMP-101", name:"Ayesha Khan", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"ayesha@company.com", phone:"", role:"Employee", pin:"0001", status:"Active" },
-    { id:uid("emp"), empId:"EMP-102", name:"Bilal Ahmed", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"bilal@company.com", phone:"", role:"Employee", pin:"0002", status:"Active" },
-    { id:uid("emp"), empId:"EMP-103", name:"Sana Tariq", department:"Support", designation:"Agent", teamLead:"LEAD-SUP", email:"sana@company.com", phone:"", role:"Employee", pin:"0003", status:"Active" },
-    { id:uid("emp"), empId:"EMP-104", name:"Hamza Sheikh", department:"Support", designation:"Agent", teamLead:"LEAD-SUP", email:"hamza@company.com", phone:"", role:"Employee", pin:"0004", status:"Active" },
-    { id:uid("emp"), empId:"EMP-105", name:"Zara Malik", department:"Operations", designation:"Executive", teamLead:"LEAD-OPS", email:"zara@company.com", phone:"", role:"Employee", pin:"0005", status:"Active" },
-  ];
+const DEFAULT_EMPLOYEES = [
+  ["Admin","admin"],["Ali Raza","employee"],["Sana Khan","employee"],
+  ["Bilal Ahmed","employee"],["Hira Yousaf","employee"],["Usman Tariq","employee"]
+].map(([name,role]) => ({ id: uid("emp"), name, role }));
+
+const DEFAULT_SETTINGS = { longBreakLimitMin: 30, adminPasscode: "admin" };
+
+function seedState(){
+  return { employees: DEFAULT_EMPLOYEES, breakTypes: DEFAULT_BREAK_TYPES, breaks: [], settings: { ...DEFAULT_SETTINGS } };
 }
 
-// light demo history so dashboards aren't empty in local mode
-function seedRecords(employees, breakTypes){
-  const recs = [];
-  const emps = employees.filter(e => e.role !== "Admin");
-  const now = Date.now();
-  for (let d=6; d>=0; d--){
-    const day = new Date(now - d*86400000);
-    emps.forEach(e => {
-      const count = 1 + Math.floor(Math.random()*3);
-      for (let i=0;i<count;i++){
-        const bt = breakTypes[Math.floor(Math.random()*breakTypes.length)];
-        const startH = 9 + Math.floor(Math.random()*8);
-        const startM = Math.floor(Math.random()*59);
-        const start = new Date(day); start.setHours(startH, startM, 0, 0);
-        const over = Math.random() < 0.22;
-        const dur = Math.max(2, Math.round(bt.maxMinutes * (over ? (1.1 + Math.random()*0.6) : (0.4 + Math.random()*0.5))));
-        const end = new Date(start.getTime() + dur*60000);
-        recs.push({
-          id: uid("rec"), employeeId:e.empId, employeeName:e.name, department:e.department, teamLead:e.teamLead,
-          breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
-          startTime: start.toISOString(), endTime: end.toISOString(),
-          durationMin: dur, note:"", date: dateStr(start), status:"Returned",
-        });
-      }
-    });
-  }
-  // a couple ongoing breaks today for live view
-  const live = [emps[0], emps[3]].filter(Boolean);
-  live.forEach((e,idx) => {
-    const bt = breakTypes[idx % breakTypes.length];
-    const start = new Date(now - (idx===0? 6: 14)*60000);
-    recs.push({
-      id: uid("rec"), employeeId:e.empId, employeeName:e.name, department:e.department, teamLead:e.teamLead,
-      breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
-      startTime: start.toISOString(), endTime:null, durationMin:null, note:"", date: todayStr(), status:"On Break",
-    });
-  });
-  return recs;
-}
+/* ---------- date / format helpers ---------- */
+const pad = (n) => String(n).padStart(2,"0");
+function localDateStr(d){ const x=new Date(d); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); }
+const todayStr = () => localDateStr(new Date());
+function fmtTime(iso){ if(!iso) return "—"; const d=new Date(iso); let h=d.getHours(); const m=pad(d.getMinutes()); const ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; }
+function fmtDateShort(d){ const x=new Date(d); return x.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function fmtDateFull(d){ const x=new Date(d); return x.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}); }
+function fmtDuration(min){ if(min==null||isNaN(min)) return "—"; min=Math.max(0,min); const h=Math.floor(min/60); const m=Math.floor(min%60); if(h>0) return h+"h "+pad(m)+"m"; if(min<1) return "<1m"; return m+"m"; }
+function fmtTimer(ms){ const t=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(t/3600); const m=Math.floor((t%3600)/60); const s=t%60; return (h>0?h+":":"")+pad(m)+":"+pad(s); }
+function minutesBetween(a,b){ return (new Date(b)-new Date(a))/60000; }
+const nowISO = () => new Date().toISOString();
+const initials = (name) => (name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const CHART_COLORS = ["#4338ca","#0ea5b7","#d97706","#059669","#db2777","#7c3aed","#dc2626","#0891b2","#65a30d","#9333ea","#e11d48","#2563eb"];
 
-function seedDb(){
-  const breakTypes = DEFAULT_BREAK_TYPES.map(b => ({...b, id: uid("bt")}));
-  const employees = seedEmployees();
-  return {
-    employees,
-    breakTypes,
-    records: seedRecords(employees, breakTypes),
-    audit: [{ id:uid("log"), timestamp:new Date().toISOString(), employeeName:"System", action:"System initialized", detail:"Demo data loaded" }],
-    settings: { company:"Your Company", refreshMs: REFRESH_MS },
-  };
-}
-
-/* ---------------- action engine (shared shape with backend) -- */
-function applyAction(db, action, p){
-  const d = clone(db);
-  const now = new Date().toISOString();
-  switch(action){
-    case "startBreak": {
-      const emp = d.employees.find(e => e.empId === p.employeeId);
-      const bt = d.breakTypes.find(b => b.id === p.breakTypeId);
-      if (!emp || !bt) break;
-      // guard: close any stray open break first
-      d.records.forEach(r => { if (r.employeeId===emp.empId && r.status==="On Break"){ r.status="Returned"; r.endTime=now; r.durationMin=Math.round(recMins(r, Date.now())); }});
-      d.records.push({
-        id: uid("rec"), employeeId: emp.empId, employeeName: emp.name, department: emp.department, teamLead: emp.teamLead,
-        breakType: bt.name, breakTypeColor: bt.color, maxMinutes: bt.maxMinutes,
-        startTime: now, endTime: null, durationMin: null, note: p.note||"", date: todayStr(), status:"On Break",
-      });
-      break;
-    }
-    case "endBreak": {
-      const r = d.records.find(x => x.id === p.recordId);
-      if (r && r.status === "On Break"){
-        r.endTime = now;
-        r.durationMin = Math.round(recMins(r, Date.now()));
-        r.status = "Returned";
-      }
-      break;
-    }
-    case "addEmployee": {
-      d.employees.push({ id: uid("emp"), status:"Active", ...p });
-      break;
-    }
-    case "updateEmployee": {
-      const i = d.employees.findIndex(e => e.id === p.id);
-      if (i>=0) d.employees[i] = { ...d.employees[i], ...p };
-      break;
-    }
-    case "deleteEmployee": {
-      d.employees = d.employees.filter(e => e.id !== p.id);
-      break;
-    }
-    case "addBreakType": {
-      d.breakTypes.push({ id: uid("bt"), active:true, ...p });
-      break;
-    }
-    case "updateBreakType": {
-      const i = d.breakTypes.findIndex(b => b.id === p.id);
-      if (i>=0) d.breakTypes[i] = { ...d.breakTypes[i], ...p };
-      break;
-    }
-    case "deleteBreakType": {
-      d.breakTypes = d.breakTypes.filter(b => b.id !== p.id);
-      break;
-    }
-    case "updateSettings": {
-      d.settings = { ...d.settings, ...p };
-      break;
-    }
-    case "addAudit": {
-      d.audit.unshift({ id: uid("log"), timestamp: now, employeeName: p.employeeName||"—", action: p.action, detail: p.detail||"" });
-      d.audit = d.audit.slice(0, 500);
-      break;
-    }
-    case "resetDemo": {
-      return seedDb();
-    }
-    default: break;
-  }
-  return d;
-}
-
-/* ---------------- storage layer (pluggable) ------------------ */
-// lazy-load a script only when its provider is selected
-function loadScript(src){
-  return new Promise((resolve, reject) => {
-    if ([...document.scripts].some(s => s.src === src)) return resolve();
-    const el = document.createElement("script");
-    el.src = src; el.onload = () => resolve(); el.onerror = () => reject(new Error("load "+src));
-    document.head.appendChild(el);
-  });
-}
-
-let _supa = null, _fs = null;
-async function supaClient(){
-  if (_supa) return _supa;
-  await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
-  _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return _supa;
-}
-async function fsDb(){
-  if (_fs) return _fs;
-  await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
-  await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js");
-  if (!window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
-  _fs = window.firebase.firestore();
-  return _fs;
-}
-function jsonbinHeaders(write){
-  const h = { "X-Master-Key": JSONBIN_KEY, "X-Bin-Meta": "false" };
-  if (write) h["Content-Type"] = "application/json";
-  return h;
-}
-
-// apps_script keeps its action-based backend (server applies + returns full db)
-function parseAppsResponse(text){
-  let data;
-  try { data = JSON.parse(text); }
-  catch(e){
-    // Apps Script returns an HTML login/error page instead of JSON when the
-    // Web app deployment isn't public or wasn't deployed correctly.
-    const looksLikeLogin = /sign in|accounts\.google|requires? (authoriz|access)|<\!?html/i.test(text);
-    throw new Error(looksLikeLogin
-      ? "Apps Script deployment is not public — set Who-has-access to \"Anyone\" and redeploy."
-      : "Apps Script did not return JSON.");
-  }
-  if (data && data.error) throw new Error("Apps Script error: " + data.error);
-  return normalizeDb(data);
-}
-async function appsGet(){
-  const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.indexOf("?") > -1 ? "&" : "?") + "t=" + Date.now();
-  const res = await fetch(url, { method:"GET", redirect:"follow" });
-  return parseAppsResponse(await res.text());
-}
-async function appsPost(action, payload){
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method:"POST",
-    redirect:"follow",
-    headers: { "Content-Type":"text/plain;charset=utf-8" }, // text/plain = no CORS preflight
-    body: JSON.stringify({ action, payload }),
-  });
-  return parseAppsResponse(await res.text());
-}
-
-const Cloud = {
-  // load whole db from the active store -> db object, or null if nothing stored yet
-  async load(){
-    if (MODE === "apps_script") return await appsGet();
-    if (MODE === "supabase"){
-      const c = await supaClient();
-      const { data, error } = await c.from(SUPABASE_TABLE).select("data").eq("id", CLOUD_ID).maybeSingle();
-      if (error) throw error;
-      return data && data.data ? normalizeDb(data.data) : null;
-    }
-    if (MODE === "firebase"){
-      const d = await fsDb();
-      const snap = await d.collection("break_mgmt").doc(CLOUD_ID).get();
-      return snap.exists ? normalizeDb(snap.data()) : null;
-    }
-    if (MODE === "jsonbin"){
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, { headers: jsonbinHeaders(false) });
-      if (!res.ok) throw new Error("jsonbin "+res.status);
-      const j = await res.json();
-      const rec = j.record || j;
-      return rec && rec.employees ? normalizeDb(rec) : null;
-    }
-    return null;
-  },
-  // overwrite whole db (blob stores); apps_script writes via appsPost instead
-  async save(db){
-    const clean = normalizeDb(db);
-    if (MODE === "supabase"){
-      const c = await supaClient();
-      const { error } = await c.from(SUPABASE_TABLE).upsert({ id: CLOUD_ID, data: clean });
-      if (error) throw error;
-    } else if (MODE === "firebase"){
-      const d = await fsDb();
-      await d.collection("break_mgmt").doc(CLOUD_ID).set(clean);
-    } else if (MODE === "jsonbin"){
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-        method:"PUT", headers: jsonbinHeaders(true), body: JSON.stringify(clean)
-      });
-      if (!res.ok) throw new Error("jsonbin "+res.status);
-    }
-  },
+/* ---------- pure reducers (local mode) ---------- */
+function upsert(arr, item, key="id"){ const i=arr.findIndex(x=>x[key]===item[key]); if(i<0) return [...arr,item]; const c=arr.slice(); c[i]=item; return c; }
+const R = {
+  addBreak:(s,rec)=>({...s,breaks:[...s.breaks,rec]}),
+  endBreak:(s,id,endTime,dur)=>({...s,breaks:s.breaks.map(b=>b.id===id?{...b,endTime,durationMin:dur,status:"completed"}:b)}),
+  updateBreak:(s,rec)=>({...s,breaks:s.breaks.map(b=>b.id===rec.id?{...b,...rec}:b)}),
+  deleteBreak:(s,id)=>({...s,breaks:s.breaks.filter(b=>b.id!==id)}),
+  saveBreakType:(s,bt)=>({...s,breakTypes:upsert(s.breakTypes,bt)}),
+  deleteBreakType:(s,id)=>({...s,breakTypes:s.breakTypes.filter(b=>b.id!==id)}),
+  saveEmployee:(s,emp)=>({...s,employees:upsert(s.employees,emp)}),
+  deleteEmployee:(s,id)=>({...s,employees:s.employees.filter(e=>e.id!==id)}),
+  saveSettings:(s,st)=>({...s,settings:{...s.settings,...st}}),
 };
 
-/* ---------------- aggregations ------------------------------- */
-function rangeRecords(records, when, ref){
-  if (when==="today") return records.filter(r => r.date === todayStr());
-  if (when==="week") return records.filter(r => weekKey(r.date) === weekKey(ref||new Date()));
-  if (when==="month") return records.filter(r => monthKey(r.date) === monthKey(ref||new Date()));
-  return records;
+/* ---------- backend client ---------- */
+async function gasGet(action, params={}){
+  const u=new URL(BACKEND_URL); u.searchParams.set("action",action);
+  Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  const r=await fetch(u.toString(),{method:"GET"}); return r.json();
 }
-function summarize(records, now){
-  const minutes = records.reduce((s,r)=> s + recMins(r, now), 0);
-  const durs = records.map(r => recMins(r, now));
+async function gasPost(body){
+  const r=await fetch(BACKEND_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
+  return r.json();
+}
+const hasBackend = () => !!BACKEND_URL;
+
+/* ---------- state hook ---------- */
+function useAppState(){
+  const [state,setState]=useState(null);
+  const [error,setError]=useState("");
+  const stateRef=useRef(state);
+  useEffect(()=>{stateRef.current=state;},[state]);
+
+  const persistLocal=useCallback((s)=>{ try{ localStorage.setItem(LS_KEY,JSON.stringify(s)); }catch(e){} },[]);
+
+  const load=useCallback(async()=>{
+    if(hasBackend()){
+      try{ const res=await gasGet("getState");
+        if(res&&res.ok){ setState(normalize(res)); setError(""); return; }
+        throw new Error("bad response");
+      }catch(e){ setError("Cannot reach the sync backend — showing local data."); }
+    }
+    try{ const raw=localStorage.getItem(LS_KEY); if(raw){ setState(normalize(JSON.parse(raw))); return; } }catch(e){}
+    const s=seedState(); setState(s); persistLocal(s);
+  },[persistLocal]);
+
+  useEffect(()=>{ load(); },[load]);
+
+  // background poll for live sync
+  useEffect(()=>{
+    if(!hasBackend()) return;
+    const t=setInterval(async()=>{
+      try{ const res=await gasGet("getState"); if(res&&res.ok) setState(normalize(res)); }catch(e){}
+    },15000);
+    return ()=>clearInterval(t);
+  },[]);
+
+  // generic op: apply local reducer immediately, sync to backend if configured
+  const op=useCallback(async(reducerKey,args,backendBody)=>{
+    const next=R[reducerKey](stateRef.current,...args);
+    setState(next);
+    if(hasBackend()){
+      try{ const res=await gasPost(backendBody); if(res&&res.ok&&res.state) setState(normalize(res.state)); else { const g=await gasGet("getState"); if(g&&g.ok) setState(normalize(g)); } }
+      catch(e){ setError("Sync failed — retrying in background."); }
+    }else{
+      persistLocal(next);
+    }
+    return next;
+  },[persistLocal]);
+
+  return { state, error, load, op };
+}
+
+function normalize(res){
   return {
-    count: records.length,
-    minutes,
-    avg: records.length ? minutes/records.length : 0,
-    longest: durs.length ? Math.max(...durs) : 0,
-    shortest: durs.length ? Math.min(...durs) : 0,
+    employees: res.employees||[],
+    breakTypes: res.breakTypes||[],
+    breaks: (res.breaks||[]).map(b=>({...b, durationMin: b.durationMin==null||b.durationMin===""?null:Number(b.durationMin)})),
+    settings: { ...DEFAULT_SETTINGS, ...(res.settings||{}), longBreakLimitMin: Number((res.settings&&res.settings.longBreakLimitMin)||DEFAULT_SETTINGS.longBreakLimitMin) }
   };
 }
-function liveBreaks(records){ return records.filter(r => r.status === "On Break" && r.date === todayStr()); }
 
-/* ---------------- export utilities --------------------------- */
-function downloadBlob(content, filename, type){
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+/* ---------- analytics ---------- */
+function rangeFor(filter,cs,ce){
+  const now=new Date();
+  const sod=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x;};
+  const eod=d=>{const x=new Date(d);x.setHours(23,59,59,999);return x;};
+  if(filter==="yesterday"){const y=new Date(now);y.setDate(y.getDate()-1);return [sod(y),eod(y)];}
+  if(filter==="weekly"){const s=new Date(now);s.setDate(s.getDate()-6);return [sod(s),eod(now)];}
+  if(filter==="monthly"){const s=new Date(now);s.setDate(s.getDate()-29);return [sod(s),eod(now)];}
+  if(filter==="custom"){const s=cs?sod(new Date(cs)):sod(now);const e=ce?eod(new Date(ce)):eod(now);return [s,e];}
+  return [sod(now),eod(now)];
 }
-function exportCSV(columns, rows, filename){
-  const esc = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
-  const csv = [columns.map(esc).join(","), ...rows.map(r => r.map(esc).join(","))].join("\n");
-  downloadBlob(csv, filename + ".csv", "text/csv;charset=utf-8;");
+function inRange(rec,start,end){ const t=new Date(rec.startTime); return t>=start&&t<=end; }
+function computeMetrics(records,now){
+  const completed=records.filter(r=>r.status==="completed"&&r.durationMin!=null);
+  const active=records.filter(r=>r.status==="active");
+  const completedMin=completed.reduce((a,r)=>a+r.durationMin,0);
+  const activeMin=active.reduce((a,r)=>a+Math.max(0,(now-new Date(r.startTime))/60000),0);
+  let longest=0; completed.forEach(r=>{if(r.durationMin>longest)longest=r.durationMin;});
+  active.forEach(r=>{const m=(now-new Date(r.startTime))/60000; if(m>longest)longest=m;});
+  return { total:records.length, totalMin:completedMin+activeMin, avgMin:completed.length?completedMin/completed.length:0, longest, completedCount:completed.length, activeCount:active.length };
 }
-function exportExcel(sheetName, columns, rows, filename){
-  if (typeof XLSX === "undefined") return exportCSV(columns, rows, filename);
-  const ws = XLSX.utils.aoa_to_sheet([columns, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31) || "Report");
-  XLSX.writeFile(wb, filename + ".xlsx");
-}
-function exportPDF(title, subtitle, columns, rows, filename){
-  if (!window.jspdf) return exportCSV(columns, rows, filename);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: columns.length > 6 ? "landscape" : "portrait" });
-  const W = doc.internal.pageSize.getWidth();
-  doc.setFillColor(15,23,42); doc.rect(0,0,W,26,"F");
-  doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text(title, 14, 13);
-  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(180,190,210);
-  doc.text(subtitle || "", 14, 20);
-  doc.setTextColor(120,130,150); doc.setFontSize(8);
-  doc.text("Generated " + new Date().toLocaleString(), W-14, 20, { align:"right" });
-  doc.autoTable({
-    head: [columns], body: rows, startY: 32,
-    styles: { fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: [30,41,59], textColor: 255, fontStyle:"bold" },
-    alternateRowStyles: { fillColor: [245,247,250] },
-    margin: { left: 14, right: 14 },
-  });
-  doc.save(filename + ".pdf");
+function groupBy(records,keyFn){ const m=new Map(); records.forEach(r=>{ const k=keyFn(r); if(!m.has(k)) m.set(k,{label:k,count:0,minutes:0}); const g=m.get(k); g.count++; if(r.durationMin!=null) g.minutes+=r.durationMin; }); return [...m.values()].sort((a,b)=>b.count-a.count); }
+function daysInRange(start,end){ const out=[]; const d=new Date(start);d.setHours(0,0,0,0); const e=new Date(end); while(d<=e){ out.push(new Date(d)); d.setDate(d.getDate()+1); if(out.length>120)break; } return out; }
+function trendByDay(records,start,end){
+  const days=daysInRange(start,end);
+  return days.map(day=>{ const ds=localDateStr(day); const recs=records.filter(r=>localDateStr(r.startTime)===ds); return { label:fmtDateShort(day), count:recs.length, minutes:recs.reduce((a,r)=>a+(r.durationMin||0),0) }; });
 }
 
-/* ============================================================
-   UI PRIMITIVES
-   ============================================================ */
-function Btn({ children, onClick, variant="primary", size="md", className="", type="button", disabled }){
-  const base = "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed";
-  const sizes = { sm:"text-xs px-2.5 py-1.5", md:"text-sm px-3.5 py-2", lg:"text-base px-5 py-2.5" };
-  const variants = {
-    primary:"bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm",
-    ghost:"bg-transparent hover:bg-slate-200/70 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200",
-    outline:"border border-slate-300 dark:border-white/15 hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200",
-    danger:"bg-rose-600 hover:bg-rose-500 text-white",
-    success:"bg-emerald-600 hover:bg-emerald-500 text-white",
-    subtle:"bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-100",
-  };
-  return <button type={type} disabled={disabled} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>{children}</button>;
-}
+/* ---------- tiny icon set ---------- */
+const I = {
+  users:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  coffee:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>,
+  check:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  clock:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  hourglass:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M5 22h14M5 2h14M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></svg>,
+  flame:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+  pie:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
+  activity:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+  plus:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  edit:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  trash:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  eye:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  x:(p)=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  search:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  download:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  play:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" {...p}><polygon points="6 4 20 12 6 20 6 4"/></svg>,
+  stop:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" {...p}><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
+  logout:(p)=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  shield:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  user:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  bell:(p)=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+  tag:(p)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+};
 
-function Card({ children, className="" }){
-  return <div className={`bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm ${className}`}>{children}</div>;
-}
+/* ---------- small components ---------- */
+function Badge({kind,children}){ return <span className={"badge badge-"+kind}>{children}</span>; }
 
-function StatCard({ label, value, sub, accent="#6366F1", icon }){
+function Stat({label,value,unit,sub,icon,tone}){
   return (
-    <Card className="p-4 overflow-hidden relative">
-      <div className="absolute right-0 top-0 h-full w-1.5" style={{ background: accent }}></div>
-      <div className="flex items-start justify-between">
-        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
-        {icon && <div className="text-lg leading-none" style={{ color: accent }}>{icon}</div>}
+    <div className="stat">
+      <div className="stat-top">
+        <span className="stat-label">{label}</span>
+        <span className={"stat-ic"+(tone?" "+tone:"")}>{icon}</span>
       </div>
-      <div className="mt-2 font-display text-2xl font-bold text-slate-900 dark:text-white tnum">{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</div>}
-    </Card>
+      <div className="stat-value">{value}{unit&&<span className="stat-unit">{unit}</span>}</div>
+      {sub&&<div className="stat-sub">{sub}</div>}
+    </div>
   );
 }
 
-function Field({ label, children, hint }){
-  return (
-    <label className="block">
-      <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</span>
-      {children}
-      {hint && <span className="block text-[11px] text-slate-400 mt-1">{hint}</span>}
-    </label>
-  );
+function Empty({icon,title,hint}){
+  return <div className="empty">{icon}<div className="empty-t">{title}</div>{hint&&<div style={{marginTop:4,fontSize:13}}>{hint}</div>}</div>;
 }
-const inputCls = "w-full rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#0B1220] px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400";
-function TextInput(props){ return <input {...props} className={inputCls + " " + (props.className||"")} />; }
-function Select({ children, ...props }){ return <select {...props} className={inputCls + " " + (props.className||"")}>{children}</select>; }
 
-function Modal({ open, onClose, title, children, wide }){
-  if (!open) return null;
+function Modal({title,onClose,children,footer,wide}){
+  useEffect(()=>{ const h=e=>{if(e.key==="Escape")onClose();}; window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/50 backdrop-blur-sm no-print" onMouseDown={onClose}>
-      <div className={`mt-8 w-full ${wide?"max-w-3xl":"max-w-md"} bg-white dark:bg-[#111A2E] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10`} onMouseDown={e=>e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-white/10">
-          <h3 className="font-display font-semibold text-slate-900 dark:text-white">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xl leading-none">×</button>
-        </div>
-        <div className="p-5">{children}</div>
+    <div className="overlay" onMouseDown={onClose}>
+      <div className={"modal"+(wide?" wide":"")} onMouseDown={e=>e.stopPropagation()}>
+        <div className="modal-head"><span className="modal-title">{title}</span><button className="icon-btn" onClick={onClose} aria-label="Close">{I.x()}</button></div>
+        <div className="modal-body">{children}</div>
+        {footer&&<div className="modal-foot">{footer}</div>}
       </div>
     </div>
   );
 }
 
-function Badge({ children, color="slate" }){
-  const map = {
-    slate:"bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300",
-    green:"bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-    amber:"bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-    red:"bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-    indigo:"bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
-  };
-  return <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${map[color]}`}>{children}</span>;
-}
-
-function StatusPill({ state }){
-  // state: working | onbreak | exceeded
-  const cfg = {
-    working:{ c:"green", dot:"#10B981", label:"Working" },
-    onbreak:{ c:"amber", dot:"#F59E0B", label:"On Break" },
-    exceeded:{ c:"red", dot:"#F43F5E", label:"Exceeded" },
-  }[state];
-  return <Badge color={cfg.c}><span className="dot" style={{background:cfg.dot}}></span>{cfg.label}</Badge>;
-}
-
-/* Chart wrapper */
-function ChartBox({ type, data, options, height=240, dark }){
-  const ref = useRef(null);
-  const inst = useRef(null);
-  useEffect(() => {
-    if (!window.Chart || !ref.current) return;
-    const grid = dark ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)";
-    const tick = dark ? "rgba(226,232,240,.7)" : "rgba(71,85,105,.85)";
-    const baseOpts = {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color: tick, font:{ family:"Inter", size:11 }, boxWidth:12, padding:12 } } },
-      scales: type==="doughnut" || type==="pie" ? {} : {
-        x:{ grid:{ color: grid }, ticks:{ color: tick, font:{ size:10 } } },
-        y:{ grid:{ color: grid }, ticks:{ color: tick, font:{ size:10 } }, beginAtZero:true },
-      },
-    };
-    inst.current = new Chart(ref.current, { type, data, options: { ...baseOpts, ...(options||{}) } });
-    return () => { if (inst.current) inst.current.destroy(); };
-  }, [JSON.stringify(data), type, dark]);
-  return <div style={{ height }}><canvas ref={ref}></canvas></div>;
-}
-
-/* Live timer for an ongoing break */
-function LiveTimer({ startTime, maxMinutes, big }){
-  const [, force] = useState(0);
-  useEffect(() => { const t = setInterval(()=>force(x=>x+1), 1000); return ()=>clearInterval(t); }, []);
-  const secs = (Date.now() - new Date(startTime).getTime())/1000;
-  const exceeded = maxMinutes && secs/60 > maxMinutes;
-  const color = exceeded ? "#F43F5E" : "#F59E0B";
-  return <span className={`font-mono font-semibold tnum ${big?"text-4xl sm:text-5xl":"text-sm"}`} style={{ color }}>{fmtClock(secs)}</span>;
-}
-
-/* Export menu */
-function ExportMenu({ title, subtitle, columns, rows, filename, label="Export" }){
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h); return ()=>document.removeEventListener("mousedown", h);
-  }, []);
-  const disabled = !rows || rows.length === 0;
+/* ---------- charts (hand-rolled SVG) ---------- */
+function Donut({data,centerLabel,centerSub}){
+  const total=data.reduce((a,d)=>a+d.value,0);
+  const size=148, r=58, sw=22, c=2*Math.PI*r;
+  let off=0;
   return (
-    <div className="relative" ref={ref}>
-      <Btn variant="outline" size="sm" onClick={()=>setOpen(o=>!o)} disabled={disabled}>⬇ {label}</Btn>
-      {open && (
-        <div className="absolute right-0 mt-1 w-36 z-20 bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-lg shadow-lg py-1 text-sm">
-          {[["Excel",()=>exportExcel(title,columns,rows,filename)],["PDF",()=>exportPDF(title,subtitle||"",columns,rows,filename)],["CSV",()=>exportCSV(columns,rows,filename)]].map(([t,fn])=>(
-            <button key={t} onClick={()=>{fn(); setOpen(false);}} className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200">{t}</button>
-          ))}
+    <div className="donut-wrap">
+      <div style={{position:"relative",width:size,height:size,flex:"none"}}>
+        <svg width={size} height={size} viewBox={"0 0 "+size+" "+size}>
+          <g transform={"rotate(-90 "+size/2+" "+size/2+")"}>
+            <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#eef1f6" strokeWidth={sw}/>
+            {total>0 && data.map((d,i)=>{ const frac=d.value/total; const len=frac*c; const el=<circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={d.color} strokeWidth={sw} strokeDasharray={len+" "+(c-len)} strokeDashoffset={-off} strokeLinecap="butt"/>; off+=len; return el; })}
+          </g>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",textAlign:"center"}}>
+          <div><div className="donut-center">{centerLabel}</div><div style={{fontSize:11,color:"var(--faint)"}}>{centerSub}</div></div>
+        </div>
+      </div>
+      <div className="legend" style={{flex:1,minWidth:160}}>
+        {data.length===0 && <span className="faint" style={{fontSize:13}}>No breaks in this range.</span>}
+        {data.map((d,i)=>(
+          <div className="legend-item" key={i}>
+            <span className="swatch" style={{background:d.color}}/>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.label}</span>
+            <span className="legend-val">{d.value}</span>
+            <span className="legend-pct">{total?Math.round(d.value/total*100):0}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Bars({data,alt,valueFmt}){
+  const max=Math.max(1,...data.map(d=>d.value));
+  return (
+    <div className="bars">
+      {data.length===0 && <div className="faint" style={{margin:"auto",fontSize:13}}>No data in this range.</div>}
+      {data.map((d,i)=>(
+        <div className="bar-col" key={i} title={d.label+": "+(valueFmt?valueFmt(d.value):d.value)}>
+          <div className="bar-val">{d.value>0?(valueFmt?valueFmt(d.value):d.value):""}</div>
+          <div className="bar-track"><div className={"bar"+(alt?" alt":"")} style={{height:(d.value/max*100)+"%"}}/></div>
+          <div className="bar-lbl">{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- helpers: type colors, input conversion ---------- */
+function typeColorMap(breakTypes){ const m={}; breakTypes.forEach((t,i)=>{ m[t.name]=CHART_COLORS[i%CHART_COLORS.length]; }); return m; }
+function colorFor(map,name,fallbackIdx){ return map[name]||CHART_COLORS[(fallbackIdx||0)%CHART_COLORS.length]; }
+function toLocalInput(iso){ if(!iso) return ""; const d=new Date(iso); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+function fromLocalInput(v){ if(!v) return null; const d=new Date(v); return isNaN(d)?null:d.toISOString(); }
+
+/* ---------- export utilities ---------- */
+function breakToRow(b){
+  return {
+    Employee:b.employeeName, Department:b.department||DEPARTMENT, "Break Type":b.breakType,
+    "Start Time":fmtTime(b.startTime), "End Time":b.status==="active"?"—":fmtTime(b.endTime),
+    Duration:b.status==="active"?"In progress":fmtDuration(b.durationMin),
+    Date:localDateStr(b.startTime), Status:b.status==="active"?"Active":"Completed", Notes:b.notes||""
+  };
+}
+function downloadBlob(content,filename,type){ const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
+function exportCSV(filename,rows){ if(!rows.length){alert("Nothing to export for this view.");return;} const cols=Object.keys(rows[0]); const esc=v=>{v=v==null?"":String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}; const csv=[cols.join(","),...rows.map(r=>cols.map(c=>esc(r[c])).join(","))].join("\n"); downloadBlob(csv,filename,"text/csv;charset=utf-8;"); }
+function exportExcel(filename,rows,sheetName){ if(!rows.length){alert("Nothing to export for this view.");return;} const ws=XLSX.utils.json_to_sheet(rows); ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.max(k.length,12)})); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheetName||"Breaks"); XLSX.writeFile(wb,filename); }
+function exportPDF(opts){
+  const { jsPDF }=window.jspdf; const doc=new jsPDF({orientation:"landscape",unit:"pt",format:"a4"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(15,23,34); doc.text(opts.title,40,42);
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(120,128,140); if(opts.subtitle) doc.text(opts.subtitle,40,60);
+  let startY=78;
+  if(opts.summary&&opts.summary.length){ doc.setFontSize(10); doc.setTextColor(55,62,78); opts.summary.forEach((line,i)=>doc.text(line,40,startY+i*15)); startY+=opts.summary.length*15+10; }
+  if(opts.columns&&opts.rows){
+    doc.autoTable({ head:[opts.columns], body:opts.rows, startY,
+      styles:{fontSize:8,cellPadding:4,textColor:[30,38,52],lineColor:[235,238,243],lineWidth:.5},
+      headStyles:{fillColor:[67,56,202],textColor:255,fontStyle:"bold"},
+      alternateRowStyles:{fillColor:[248,249,251]}, margin:{left:40,right:40} });
+  }
+  doc.save(opts.filename);
+}
+
+/* ---------- filter bar ---------- */
+const RANGE_TABS=[["today","Today"],["yesterday","Yesterday"],["weekly","Weekly"],["monthly","Monthly"],["custom","Custom"]];
+function FilterBar({filter,setFilter,cs,setCs,ce,setCe,employees,empId,setEmpId,types,typeName,setTypeName,search,setSearch,children}){
+  return (
+    <div className="filterbar">
+      <div className="chip-row">
+        {RANGE_TABS.map(([k,l])=>(<button key={k} className={"chip"+(filter===k?" active":"")} onClick={()=>setFilter(k)}>{l}</button>))}
+      </div>
+      {filter==="custom"&&(
+        <div className="fdate">
+          <input className="input" type="date" value={cs||""} onChange={e=>setCs(e.target.value)} aria-label="Start date"/>
+          <span className="faint">to</span>
+          <input className="input" type="date" value={ce||""} onChange={e=>setCe(e.target.value)} aria-label="End date"/>
         </div>
       )}
+      {employees&&(
+        <div className="fsel"><select className="select" value={empId} onChange={e=>setEmpId(e.target.value)} aria-label="Filter by employee">
+          <option value="all">All employees</option>
+          {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+        </select></div>
+      )}
+      {types&&(
+        <div className="fsel"><select className="select" value={typeName} onChange={e=>setTypeName(e.target.value)} aria-label="Filter by break type">
+          <option value="all">All break types</option>
+          {types.map(t=><option key={t.id} value={t.name}>{t.name}</option>)}
+        </select></div>
+      )}
+      {search!=null&&(
+        <div className="search">{I.search()}<input className="input" placeholder="Search employee, type, notes…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
+      )}
+      {children&&<div className="row-flex" style={{marginLeft:"auto"}}>{children}</div>}
     </div>
   );
 }
+function ExportButtons({getRows,filenameBase,reportOpts}){
+  const stamp=todayStr();
+  const doExcel=()=>exportExcel(filenameBase+"-"+stamp+".xlsx",getRows().map(breakToRow));
+  const doCSV=()=>exportCSV(filenameBase+"-"+stamp+".csv",getRows().map(breakToRow));
+  const doPDF=()=>{ const rows=getRows(); const cols=["Employee","Break Type","Start","End","Duration","Date","Status"];
+    const body=rows.map(b=>[b.employeeName,b.breakType,fmtTime(b.startTime),b.status==="active"?"—":fmtTime(b.endTime),b.status==="active"?"In progress":fmtDuration(b.durationMin),localDateStr(b.startTime),b.status==="active"?"Active":"Completed"]);
+    exportPDF({ filename:filenameBase+"-"+stamp+".pdf", title:(reportOpts&&reportOpts.title)||"Break Report — Ecommerce", subtitle:(reportOpts&&reportOpts.subtitle)||("Generated "+fmtDateFull(new Date())), summary:reportOpts&&reportOpts.summary, columns:cols, rows:body }); };
+  return (<>
+    <button className="btn sm" onClick={doExcel}>{I.download()} Excel</button>
+    <button className="btn sm" onClick={doCSV}>{I.download()} CSV</button>
+    <button className="btn sm" onClick={doPDF}>{I.download()} PDF</button>
+  </>);
+}
 
-/* Simple data table */
-function DataTable({ columns, rows, empty="No records." }){
+/* ---------- breaks table ---------- */
+function StatusBadge({b,now}){
+  const limit=b._limit||30;
+  if(b.status==="active"){ const over=(now-new Date(b.startTime))/60000>limit; return <Badge kind={over?"alert":"busy"}>{over?"Long break":"On break"}</Badge>; }
+  return <Badge kind="slate">Completed</Badge>;
+}
+function LiveDuration({start,now}){ return <span className="mono">{fmtTimer(now-new Date(start))}</span>; }
+function BreaksTable({rows,isAdmin,onView,onEdit,onDelete,now,limit}){
+  if(!rows.length) return <Empty icon={I.coffee({width:30,height:30})} title="No breaks found" hint="Adjust the filters or date range above."/>;
   return (
-    <div className="overflow-x-auto -mx-1 px-1">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
-            {columns.map((c,i)=><th key={i} className="px-3 py-2.5 font-medium whitespace-nowrap">{c}</th>)}
-          </tr>
-        </thead>
+    <div className="table-wrap">
+      <table className="tbl">
+        <thead><tr>
+          <th>Employee</th><th>Break Type</th><th>Start</th><th>End</th><th>Duration</th><th>Date</th><th>Status</th>
+          <th style={{textAlign:"right"}}>{isAdmin?"Actions":""}</th>
+        </tr></thead>
         <tbody>
-          {rows.length===0 ? (
-            <tr><td colSpan={columns.length} className="px-3 py-8 text-center text-slate-400">{empty}</td></tr>
-          ) : rows.map((r,i)=>(
-            <tr key={i} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[.03]">
-              {r.map((cell,j)=><td key={j} className="px-3 py-2.5 align-middle whitespace-nowrap">{cell}</td>)}
+          {rows.map(b=>(
+            <tr key={b.id}>
+              <td><div className="row-flex" style={{gap:9}}><span className="av" style={{width:28,height:28,fontSize:11}}>{initials(b.employeeName)}</span><span className="cell-strong">{b.employeeName}</span></div></td>
+              <td>{b.breakType}</td>
+              <td className="nums">{fmtTime(b.startTime)}</td>
+              <td className="nums">{b.status==="active"?<span className="faint">—</span>:fmtTime(b.endTime)}</td>
+              <td className="nums cell-strong">{b.status==="active"?<LiveDuration start={b.startTime} now={now}/>:fmtDuration(b.durationMin)}</td>
+              <td className="nums faint">{fmtDateShort(b.startTime)}</td>
+              <td><StatusBadge b={{...b,_limit:limit}} now={now}/></td>
+              <td>
+                <div className="row-actions">
+                  <button className="icon-btn" title="View" onClick={()=>onView(b)}>{I.eye()}</button>
+                  {isAdmin&&<button className="icon-btn" title="Edit" onClick={()=>onEdit(b)}>{I.edit()}</button>}
+                  {isAdmin&&<button className="icon-btn danger" title="Delete" onClick={()=>onDelete(b)}>{I.trash()}</button>}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -622,950 +674,796 @@ function DataTable({ columns, rows, empty="No records." }){
   );
 }
 
-function SectionTitle({ children, right }){
+/* ---------- view / edit / confirm modals ---------- */
+function ViewBreakModal({b,onClose}){
+  const Row=({k,v})=>(<div style={{display:"flex",justifyContent:"space-between",gap:16,padding:"9px 0",borderBottom:"1px solid var(--line-2)"}}><span className="muted" style={{fontSize:13}}>{k}</span><span style={{fontWeight:600,textAlign:"right"}}>{v}</span></div>);
   return (
-    <div className="flex items-center justify-between mb-3 gap-3">
-      <h2 className="font-display text-lg font-semibold text-slate-900 dark:text-white">{children}</h2>
-      {right}
-    </div>
+    <Modal title="Break details" onClose={onClose} footer={<button className="btn" onClick={onClose}>Close</button>}>
+      <Row k="Employee" v={b.employeeName}/>
+      <Row k="Department" v={b.department||DEPARTMENT}/>
+      <Row k="Break type" v={b.breakType}/>
+      <Row k="Start time" v={fmtTime(b.startTime)+" • "+fmtDateShort(b.startTime)}/>
+      <Row k="End time" v={b.status==="active"?"In progress":fmtTime(b.endTime)}/>
+      <Row k="Duration" v={b.status==="active"?"Running":fmtDuration(b.durationMin)}/>
+      <Row k="Date" v={fmtDateFull(b.startTime)}/>
+      <Row k="Status" v={b.status==="active"?"Active":"Completed"}/>
+      {b.notes&&<div style={{paddingTop:10}}><div className="muted" style={{fontSize:13,marginBottom:4}}>Notes</div><div>{b.notes}</div></div>}
+    </Modal>
   );
 }
-
-/* ============================================================
-   CHART DATA BUILDERS
-   ============================================================ */
-const PALETTE = ["#6366F1","#10B981","#F59E0B","#22D3EE","#F43F5E","#A78BFA","#0EA5E9","#F472B6","#84CC16","#FB923C"];
-
-function trendData(records, mode, now){
-  const buckets = [];
-  const n = mode==="day"?14:mode==="week"?8:6;
-  for (let i=n-1;i>=0;i--){
-    let key, label;
-    if (mode==="day"){ const d=new Date(now-i*86400000); key=dateStr(d); label=fmtDay(d); }
-    else if (mode==="week"){ const d=new Date(now-i*7*86400000); key=weekKey(d); label=fmtDay(new Date(key)); }
-    else { const d=new Date(); d.setMonth(d.getMonth()-i); key=monthKey(d); label=d.toLocaleDateString([], {month:"short"}); }
-    buckets.push({ key, label, mins:0 });
-  }
-  const idx = {}; buckets.forEach((b,i)=>idx[b.key]=i);
-  records.forEach(r => {
-    const k = mode==="day"? r.date : mode==="week"? weekKey(r.date) : monthKey(r.date);
-    if (idx[k]!=null) buckets[idx[k]].mins += recMins(r, now);
-  });
-  return {
-    labels: buckets.map(b=>b.label),
-    datasets: [{ label:"Break minutes", data: buckets.map(b=>Math.round(b.mins)), backgroundColor:"#6366F1", borderColor:"#6366F1", borderRadius:6, maxBarThickness:34, tension:.35, fill:false }],
+function EditBreakModal({b,breakTypes,onClose,onSave}){
+  const [breakType,setBreakType]=useState(b.breakType);
+  const [start,setStart]=useState(toLocalInput(b.startTime));
+  const [end,setEnd]=useState(toLocalInput(b.endTime));
+  const [notes,setNotes]=useState(b.notes||"");
+  const [err,setErr]=useState("");
+  const typeOpts=useMemo(()=>{ const names=breakTypes.filter(t=>t.status==="Active").map(t=>t.name); if(!names.includes(b.breakType)) names.unshift(b.breakType); return names; },[breakTypes,b.breakType]);
+  const save=()=>{
+    const startISO=fromLocalInput(start); if(!startISO){setErr("Start time is required.");return;}
+    const endISO=fromLocalInput(end);
+    if(endISO&&new Date(endISO)<=new Date(startISO)){setErr("End time must be after the start time.");return;}
+    const rec={ id:b.id, breakType, startTime:startISO, notes:notes.trim(),
+      endTime:endISO, status:endISO?"completed":"active", durationMin:endISO?Math.round(minutesBetween(startISO,endISO)):null,
+      date:localDateStr(startISO) };
+    onSave(rec); onClose();
   };
-}
-function typeDistData(records, breakTypes, now){
-  const m = {}; records.forEach(r => { m[r.breakType] = (m[r.breakType]||0) + 1; });
-  const labels = Object.keys(m);
-  const colors = labels.map(l => (breakTypes.find(b=>b.name===l)||{}).color || "#94A3B8");
-  return { labels, datasets:[{ data: labels.map(l=>m[l]), backgroundColor: colors, borderWidth:0 }] };
-}
-function groupBarData(records, field, now, label){
-  const m = {}; records.forEach(r => { const k = r[field] || "—"; m[k] = (m[k]||0) + recMins(r, now); });
-  const labels = Object.keys(m);
-  return { labels, datasets:[{ label, data: labels.map(k=>Math.round(m[k])), backgroundColor: labels.map((_,i)=>PALETTE[i%PALETTE.length]), borderRadius:6, maxBarThickness:38 }] };
-}
-function rankingData(records, now, top=10){
-  const m = {}; records.forEach(r => { m[r.employeeName] = (m[r.employeeName]||0) + recMins(r, now); });
-  const sorted = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0, top);
-  return {
-    labels: sorted.map(s=>s[0]),
-    datasets:[{ label:"Break minutes", data: sorted.map(s=>Math.round(s[1])), backgroundColor:"#6366F1", borderRadius:6 }],
-  };
-}
-
-/* ============================================================
-   LOGIN
-   ============================================================ */
-function LoginScreen({ db, onLogin, theme, toggleTheme }){
-  const [empId, setEmpId] = useState("");
-  const [pin, setPin] = useState("");
-  const [err, setErr] = useState("");
-
-  const submit = () => {
-    const idIn = empId.trim().toLowerCase();
-    const e = db.employees.find(x => String(x.empId).trim().toLowerCase() === idIn);
-    if (!e){ setErr("Employee ID not found."); return; }
-    if (e.status !== "Active"){ setErr("This account is deactivated."); return; }
-    const stored = String(e.pin).trim(), entered = pin.trim();
-    const numMatch = stored !== "" && entered !== "" && !isNaN(Number(stored)) && !isNaN(Number(entered)) && Number(stored) === Number(entered);
-    if (stored !== entered && !numMatch){ setErr("Incorrect PIN."); return; }
-    setErr(""); onLogin(e);
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-[#0B1220] dark:to-[#0a0f1c]">
-      <div className="absolute top-4 right-4">
-        <Btn variant="ghost" size="sm" onClick={toggleTheme}>{theme==="dark"?"☀ Light":"🌙 Dark"}</Btn>
+    <Modal title="Edit break" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save changes</button></>}>
+      {err&&<div className="banner warn">{err}</div>}
+      <div className="field"><label className="label">Employee</label><input className="input" value={b.employeeName} disabled/></div>
+      <div className="field"><label className="label">Break type</label>
+        <select className="select" value={breakType} onChange={e=>setBreakType(e.target.value)}>{typeOpts.map(n=><option key={n} value={n}>{n}</option>)}</select>
       </div>
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white text-2xl font-display font-bold shadow-lg shadow-indigo-600/25">⏱</div>
-          <h1 className="mt-4 font-display text-2xl font-bold text-slate-900 dark:text-white">Break Manager</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Track breaks. See live status. Report instantly.</p>
-        </div>
-        <Card className="p-6">
-          <div className="space-y-4">
-            <Field label="Employee ID">
-              <TextInput value={empId} onChange={e=>setEmpId(e.target.value)} placeholder="e.g. EMP-101" onKeyDown={e=>e.key==="Enter"&&submit()} autoFocus />
-            </Field>
-            <Field label="PIN">
-              <TextInput type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="••••" onKeyDown={e=>e.key==="Enter"&&submit()} />
-            </Field>
-            {err && <div className="text-sm text-rose-600 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-3 py-2">{err}</div>}
-            <Btn size="lg" className="w-full" onClick={submit}>Sign in</Btn>
-          </div>
-        </Card>
-        <p className="text-center text-[11px] text-slate-400 mt-4 leading-relaxed">
-          Demo logins — Admin: <span className="font-mono">ADMIN / 1234</span> · Lead: <span className="font-mono">LEAD-OPS / 1111</span> · Employee: <span className="font-mono">EMP-101 / 0001</span>
-        </p>
+      <div className="form-grid">
+        <div className="field"><label className="label">Start time</label><input className="input" type="datetime-local" value={start} onChange={e=>setStart(e.target.value)}/></div>
+        <div className="field"><label className="label">End time <span className="faint">(leave blank if active)</span></label><input className="input" type="datetime-local" value={end} onChange={e=>setEnd(e.target.value)}/></div>
       </div>
-    </div>
+      <div className="field"><label className="label">Notes</label><textarea className="textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional"/></div>
+    </Modal>
   );
 }
-
-/* ============================================================
-   EMPLOYEE VIEW
-   ============================================================ */
-function StartBreakModal({ open, onClose, breakTypes, onStart }){
-  const [typeId, setTypeId] = useState("");
-  const [note, setNote] = useState("");
-  const active = breakTypes.filter(b=>b.active);
-  useEffect(()=>{ if(open){ setTypeId(""); setNote(""); } }, [open]);
+function ConfirmModal({title,message,confirmLabel,danger,onClose,onConfirm}){
   return (
-    <Modal open={open} onClose={onClose} title="Start a break">
-      <div className="space-y-4">
-        <div>
-          <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Select break type</span>
-          <div className="grid grid-cols-2 gap-2">
-            {active.map(b => (
-              <button key={b.id} onClick={()=>setTypeId(b.id)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm text-left transition ${typeId===b.id?"border-indigo-500 ring-2 ring-indigo-400/40 bg-indigo-50 dark:bg-indigo-500/10":"border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"}`}>
-                <span className="dot" style={{background:b.color, width:10, height:10}}></span>
-                <span className="flex-1">
-                  <span className="block font-medium text-slate-800 dark:text-slate-100">{b.name}</span>
-                  <span className="block text-[11px] text-slate-400">limit {b.maxMinutes}m</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <Field label="Note (optional)">
-          <TextInput value={note} onChange={e=>setNote(e.target.value)} placeholder="Reason / context" />
-        </Field>
-        <div className="flex gap-2 justify-end">
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn disabled={!typeId} onClick={()=>onStart(typeId, note)}>Start break</Btn>
-        </div>
-      </div>
+    <Modal title={title} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className={"btn "+(danger?"danger":"primary")} onClick={()=>{onConfirm();onClose();}}>{confirmLabel||"Confirm"}</button></>}>
+      <p className="mt0" style={{margin:0,color:"var(--muted)"}}>{message}</p>
     </Modal>
   );
 }
 
-function EmployeeView({ db, user, dispatch, theme }){
-  const dark = theme === "dark";
-  const [showStart, setShowStart] = useState(false);
-  const now = Date.now();
-  const myRecords = useMemo(()=> db.records.filter(r => r.employeeId === user.empId), [db.records, user.empId]);
-  const active = myRecords.find(r => r.status === "On Break");
-
-  const today = summarize(rangeRecords(myRecords,"today"), now);
-  const week = summarize(rangeRecords(myRecords,"week"), now);
-  const month = summarize(rangeRecords(myRecords,"month"), now);
-
-  const start = (typeId, note) => {
-    const bt = db.breakTypes.find(b=>b.id===typeId);
-    dispatch("startBreak", { employeeId:user.empId, breakTypeId:typeId, note },
-      { employeeName:user.name, action:"Break started", detail: bt? bt.name : "" });
-    setShowStart(false);
+/* ---------- login ---------- */
+function Login({state,onLogin,onAddEmployee}){
+  const [mode,setMode]=useState("employee");
+  const employees=state.employees.filter(e=>e.role==="employee");
+  const [empId,setEmpId]=useState(employees[0]?employees[0].id:"");
+  const [empPass,setEmpPass]=useState("");
+  const [pass,setPass]=useState("");
+  const [err,setErr]=useState("");
+  const [adding,setAdding]=useState(employees.length===0);
+  const [newName,setNewName]=useState("");
+  const [newPass,setNewPass]=useState("");
+  const selEmp=state.employees.find(x=>x.id===empId);
+  const enterEmployee=()=>{
+    const e=selEmp; if(!e){setErr("Pick your name to continue.");return;}
+    if(e.password&&empPass!==e.password){setErr("Incorrect password.");return;}
+    onLogin(e);
   };
-  const end = () => {
-    dispatch("endBreak", { recordId: active.id },
-      { employeeName:user.name, action:"Break ended", detail: active.breakType });
+  const enterAdmin=()=>{ const byPass=state.employees.find(e=>e.role==="admin"&&e.password&&e.password===pass); if(byPass){ onLogin(byPass); return; } if(pass===state.settings.adminPasscode){ const admin=state.employees.find(e=>e.role==="admin")||{id:"admin",name:"Admin",role:"admin"}; onLogin(admin); return; } setErr("Incorrect password."); };
+  const addSelf=()=>{
+    const name=newName.trim(); if(!name){setErr("Enter your name to continue.");return;}
+    const emp={ id:uid("emp"), name, role:"employee", password:newPass.trim() };
+    if(onAddEmployee) onAddEmployee(emp);
+    onLogin(emp);
+  };
+  return (
+    <div className="login">
+      <div className="login-card">
+        <div className="login-top">
+          <div className="login-badge">{I.coffee({width:26,height:26,stroke:"#fff"})}</div>
+          <div className="login-title">Break Board</div>
+          <div className="login-sub">Ecommerce Department · break tracking</div>
+        </div>
+        <div className="login-body">
+          <div className="seg">
+            <button className={"seg-btn"+(mode==="employee"?" active":"")} onClick={()=>{setMode("employee");setErr("");}}>{I.user()} Employee</button>
+            <button className={"seg-btn"+(mode==="admin"?" active":"")} onClick={()=>{setMode("admin");setErr("");}}>{I.shield()} Admin</button>
+          </div>
+          {err&&<div className="banner warn">{err}</div>}
+          {mode==="employee"?(
+            adding?(
+              <>
+                <div className="field"><label className="label">Your full name</label>
+                  <input className="input" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Ayesha Malik" autoFocus/>
+                </div>
+                <div className="field" style={{marginTop:12}}><label className="label">Password <span className="faint">(optional)</span></label>
+                  <input className="input" type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSelf()} placeholder="Set a login password"/>
+                </div>
+                <button className="btn primary lg block" style={{marginTop:14}} onClick={addSelf}>{I.plus()} Add me & continue</button>
+                {employees.length>0&&<button className="btn ghost block" style={{marginTop:8}} onClick={()=>{setAdding(false);setErr("");}}>Back to the list</button>}
+              </>
+            ):(
+              <>
+                <div className="field"><label className="label">Who's starting a shift?</label>
+                  <select className="select" value={empId} onChange={e=>{setEmpId(e.target.value);setEmpPass("");setErr("");}}>
+                    {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                </div>
+                {selEmp&&selEmp.password&&(
+                  <div className="field" style={{marginTop:12}}><label className="label">Your password</label>
+                    <input className="input" type="password" value={empPass} onChange={e=>setEmpPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enterEmployee()} placeholder="Enter your password" autoFocus/>
+                  </div>
+                )}
+                <button className="btn primary lg block" style={{marginTop:14}} onClick={enterEmployee} disabled={!empId}>Continue</button>
+                <button className="btn ghost block" style={{marginTop:8}} onClick={()=>{setAdding(true);setNewName("");setNewPass("");setErr("");}}>{I.plus()} New here? Add yourself</button>
+              </>
+            )
+          ):(
+            <>
+              <div className="field"><label className="label">Admin password</label>
+                <input className="input" type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enterAdmin()} placeholder="Enter password" autoFocus/>
+              </div>
+              <button className="btn primary lg block" onClick={enterAdmin}>Open dashboard</button>
+              <div className="hint">Default passcode is <b>admin</b> — change it in Settings after signing in.</div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- employee: my break ---------- */
+function MyBreak({state,user,ops,now,notify}){
+  const limit=state.settings.longBreakLimitMin;
+  const active=state.breaks.find(b=>b.employeeId===user.id&&b.status==="active");
+  const activeTypes=state.breakTypes.filter(t=>t.status==="Active");
+  const [typeId,setTypeId]=useState(activeTypes[0]?activeTypes[0].id:"");
+  const [notes,setNotes]=useState("");
+  useEffect(()=>{ if(!typeId&&activeTypes[0]) setTypeId(activeTypes[0].id); },[activeTypes,typeId]);
+
+  const mine=state.breaks.filter(b=>b.employeeId===user.id);
+  const today=mine.filter(b=>b.date===todayStr());
+  const m=computeMetrics(today,now);
+
+  const start=()=>{
+    const t=state.breakTypes.find(x=>x.id===typeId); if(!t){notify("Pick a break type first","info");return;}
+    const rec={ id:uid("brk"), employeeId:user.id, employeeName:user.name, department:DEPARTMENT, breakTypeId:t.id, breakType:t.name, startTime:nowISO(), endTime:null, durationMin:null, date:todayStr(), notes:notes.trim(), status:"active" };
+    ops.op("addBreak",[rec],{action:"addBreak",record:rec});
+    notify("Break started — "+t.name,"start","Enjoy your "+t.name.toLowerCase());
+    setNotes("");
+  };
+  const end=()=>{
+    const endISO=nowISO(); const dur=Math.round(minutesBetween(active.startTime,endISO));
+    ops.op("endBreak",[active.id,endISO,dur],{action:"endBreak",id:active.id,endTime:endISO,durationMin:dur});
+    if(dur>limit) notify("Long break ended — "+fmtDuration(dur),"alert","That was over the "+limit+"-minute limit");
+    else notify("Break ended — "+fmtDuration(dur),"end","Welcome back");
   };
 
-  const histRows = [...myRecords].sort((a,b)=> new Date(b.startTime)-new Date(a.startTime)).slice(0,40).map(r => [
-    fmtDay(r.date),
-    <span className="inline-flex items-center gap-1.5"><span className="dot" style={{background:r.breakTypeColor}}></span>{r.breakType}</span>,
-    fmtTime(r.startTime),
-    r.endTime ? fmtTime(r.endTime) : <Badge color="amber">ongoing</Badge>,
-    r.status==="On Break" ? <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /> :
-      <span className={isExceeded(r, now)?"text-rose-600 font-medium":""}>{fmtMins(r.durationMin)}</span>,
-    isExceeded(r, now) ? <Badge color="red">over</Badge> : <Badge color="green">ok</Badge>,
-  ]);
+  const runningMin=active?(now-new Date(active.startTime))/60000:0;
+  const over=active&&runningMin>limit;
 
   return (
-    <div className="space-y-6">
-      {/* Action / live state */}
-      <Card className="p-6">
-        {active ? (
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className={`flex items-center justify-center w-28 h-28 rounded-full border-4 ${isExceeded(active,now)?"border-rose-400 pulse-red":"border-amber-400 pulse-amber"}`}>
-              <LiveTimer startTime={active.startTime} maxMinutes={active.maxMinutes} big />
-            </div>
-            <div className="flex-1 text-center sm:text-left">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Currently on</div>
-              <div className="font-display text-2xl font-bold text-slate-900 dark:text-white flex items-center justify-center sm:justify-start gap-2">
-                <span className="dot" style={{background:active.breakTypeColor, width:12, height:12}}></span>{active.breakType}
-              </div>
-              <div className="text-sm text-slate-500 mt-1">Started {fmtTime(active.startTime)} · limit {active.maxMinutes}m {isExceeded(active,now) && <span className="text-rose-600 font-medium">· limit exceeded</span>}</div>
-              {active.note && <div className="text-sm text-slate-400 mt-1 italic">“{active.note}”</div>}
-            </div>
-            <Btn variant="danger" size="lg" onClick={end}>End break</Btn>
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Your shift</div><h2 className="h2">Hi {user.name.split(" ")[0]} 👋</h2></div></div>
+
+      <div className="self-hero">
+        {active?(
+          <div className={"now-card on"+(over?" over":"")}>
+            <div className="now-status"><span className={"dot "+(over?"dot-alert pulse-alert":"dot-busy pulse")}/>{over?"On a long break":"You're on a break"}</div>
+            <div className="now-big mono">{fmtTimer(now-new Date(active.startTime))}</div>
+            <div className="now-type">{active.breakType}</div>
+            <div className="now-sub">Started at {fmtTime(active.startTime)}{active.notes?" · "+active.notes:""}</div>
+            {over&&<div className="banner warn" style={{marginTop:14}}>{I.bell()} You've passed the {limit}-minute limit for this break.</div>}
+            <button className="btn lg block" style={{marginTop:18,background:over?"var(--alert)":"var(--ink)",borderColor:"transparent",color:"#fff"}} onClick={end}>{I.stop({stroke:"none"})} End break</button>
           </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <div className="font-display text-xl font-semibold text-slate-900 dark:text-white">You're working <span className="dot ml-1" style={{background:"#10B981"}}></span></div>
-              <div className="text-sm text-slate-500">Take a break when you need one — it's logged automatically.</div>
+        ):(
+          <div className="now-card">
+            <div className="now-status"><span className="dot dot-free"/>Available · not on a break</div>
+            <div className="field" style={{marginTop:18}}><label className="label">Break type</label>
+              <select className="select" value={typeId} onChange={e=>setTypeId(e.target.value)}>
+                {activeTypes.length===0&&<option value="">No active break types</option>}
+                {activeTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             </div>
-            <Btn variant="success" size="lg" onClick={()=>setShowStart(true)}>▶ Start break</Btn>
+            <div className="field" style={{marginTop:12}}><label className="label">Notes <span className="faint">(optional)</span></label>
+              <textarea className="textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="e.g. stepping out for lunch" style={{minHeight:60}}/>
+            </div>
+            <button className="btn primary lg block" style={{marginTop:16}} onClick={start} disabled={!typeId}>{I.play()} Start break</button>
           </div>
         )}
-      </Card>
 
-      {/* Summaries */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[["Today",today,"#6366F1"],["This week",week,"#22D3EE"],["This month",month,"#10B981"]].map(([t,s,c])=>(
-          <Card key={t} className="p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide" style={{color:c}}>{t}</div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <Mini label="Breaks" value={s.count} />
-              <Mini label="Minutes" value={fmtMins(s.minutes)} />
-              <Mini label={t==="Today"?"Longest":"Avg / break"} value={t==="Today"?fmtMins(s.longest):fmtMins(s.avg)} />
-              <Mini label={t==="Today"?"Avg / break":(t==="This week"?"Avg / day":"Avg / week")} value={t==="Today"?fmtMins(s.avg):(t==="This week"?fmtMins(s.minutes/7):fmtMins(s.minutes/4))} />
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* History */}
-      <Card className="p-4">
-        <SectionTitle right={<ExportMenu title="My Break History" subtitle={user.name} columns={["Date","Break Type","Start","End","Duration (min)","Exceeded"]}
-          rows={myRecords.map(r=>[r.date,r.breakType,fmtTime(r.startTime),r.endTime?fmtTime(r.endTime):"ongoing",r.endTime?r.durationMin:Math.round(recMins(r,now)),isExceeded(r,now)?"Yes":"No"])}
-          filename={"my-breaks-"+todayStr()} />}>My break history</SectionTitle>
-        <DataTable columns={["Date","Type","Start","End","Duration","Status"]} rows={histRows} empty="No breaks yet." />
-      </Card>
-
-      <StartBreakModal open={showStart} onClose={()=>setShowStart(false)} breakTypes={db.breakTypes} onStart={start} />
-    </div>
-  );
-}
-function Mini({ label, value }){
-  return <div><div className="text-lg font-bold font-display tnum text-slate-900 dark:text-white">{value}</div><div className="text-[11px] text-slate-400">{label}</div></div>;
-}
-
-/* ============================================================
-   LIVE STATUS TABLE (shared)
-   ============================================================ */
-function LiveStatusTable({ employees, records, now }){
-  const live = liveBreaks(records);
-  const liveByEmp = {}; live.forEach(r => liveByEmp[r.employeeId] = r);
-  const rows = employees.filter(e=>e.role!=="Admin" && e.status==="Active").map(e => {
-    const r = liveByEmp[e.empId];
-    const state = !r ? "working" : (isExceeded(r, now) ? "exceeded" : "onbreak");
-    return [
-      <span className="font-medium text-slate-800 dark:text-slate-100">{e.name}</span>,
-      e.department,
-      r ? <span className="inline-flex items-center gap-1.5"><span className="dot" style={{background:r.breakTypeColor}}></span>{r.breakType}</span> : <span className="text-slate-400">—</span>,
-      r ? fmtTime(r.startTime) : <span className="text-slate-400">—</span>,
-      r ? <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /> : <span className="text-slate-400">—</span>,
-      <StatusPill state={state} />,
-    ];
-  }).sort((a,b)=>0);
-  return <DataTable columns={["Employee","Department","Break Type","Started","Duration","Status"]} rows={rows} empty="No active employees." />;
-}
-
-/* ============================================================
-   ADMIN VIEW
-   ============================================================ */
-function AdminView({ db, dispatch, theme, section, setSection }){
-  const dark = theme === "dark";
-  const now = Date.now();
-  const emps = db.employees.filter(e => e.role !== "Admin");
-  const activeEmps = emps.filter(e => e.status === "Active");
-  const todayRecs = rangeRecords(db.records, "today");
-  const live = liveBreaks(db.records);
-  const exceeding = live.filter(r => isExceeded(r, now));
-  const sToday = summarize(todayRecs, now);
-
-  return (
-    <div className="space-y-6">
-      {section==="dashboard" && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Employees" value={activeEmps.length} sub={`${emps.length} total`} accent="#6366F1" icon="👥" />
-            <StatCard label="On Break Now" value={live.length} sub={`${exceeding.length} over limit`} accent="#F59E0B" icon="⏸" />
-            <StatCard label="Breaks Today" value={sToday.count} accent="#22D3EE" icon="📊" />
-            <StatCard label="Break Min Today" value={fmtMins(sToday.minutes)} accent="#10B981" icon="⏱" />
-            <StatCard label="Avg Break" value={fmtMins(sToday.avg)} accent="#A78BFA" />
-            <StatCard label="Longest Today" value={fmtMins(sToday.longest)} accent="#F472B6" />
-            <StatCard label="Over Limit" value={exceeding.length} accent="#F43F5E" icon="🚩" />
-            <StatCard label="Working Now" value={activeEmps.length - live.length} accent="#0EA5E9" />
-          </div>
-
-          {exceeding.length > 0 && (
-            <Card className="p-4 border-rose-200 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/[.06]">
-              <div className="flex items-center gap-2 mb-2 text-rose-700 dark:text-rose-300 font-semibold text-sm">🚩 {exceeding.length} employee{exceeding.length>1?"s":""} exceeding break limit</div>
-              <div className="flex flex-wrap gap-2">
-                {exceeding.map(r => <Badge key={r.id} color="red">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></Badge>)}
-              </div>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-4"><SectionTitle>Daily break trend (14d)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(db.records,"day",now)} /></Card>
-            <Card className="p-4"><SectionTitle>Break type distribution</SectionTitle><ChartBox type="doughnut" dark={dark} data={typeDistData(db.records, db.breakTypes, now)} options={{cutout:"58%"}} /></Card>
-            <Card className="p-4"><SectionTitle>Weekly trend (8w)</SectionTitle><ChartBox type="line" dark={dark} data={trendData(db.records,"week",now)} /></Card>
-            <Card className="p-4"><SectionTitle>Monthly trend (6m)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(db.records,"month",now)} /></Card>
-            <Card className="p-4"><SectionTitle>Department-wise break time</SectionTitle><ChartBox type="bar" dark={dark} data={groupBarData(db.records,"department",now,"Minutes")} /></Card>
-            <Card className="p-4"><SectionTitle>Team-wise break time</SectionTitle><ChartBox type="bar" dark={dark} data={groupBarData(db.records,"teamLead",now,"Minutes")} /></Card>
-            <Card className="p-4 lg:col-span-2"><SectionTitle>Employee ranking — top 10 by break time</SectionTitle><ChartBox type="bar" dark={dark} height={300} data={rankingData(db.records, now, 10)} options={{indexAxis:"y"}} /></Card>
-          </div>
-        </>
-      )}
-
-      {section==="live" && (
-        <Card className="p-4">
-          <SectionTitle right={<Badge color="amber"><span className="dot" style={{background:"#F59E0B"}}></span>{live.length} on break</Badge>}>Live status</SectionTitle>
-          <LiveStatusTable employees={db.employees} records={db.records} now={now} />
-        </Card>
-      )}
-
-      {section==="employees" && <EmployeesManager db={db} dispatch={dispatch} />}
-      {section==="breaktypes" && <BreakTypesManager db={db} dispatch={dispatch} />}
-      {section==="reports" && <ReportsView db={db} scope="all" />}
-      {section==="audit" && <AuditView db={db} dispatch={dispatch} />}
-    </div>
-  );
-}
-
-/* ----- Employees Manager ----- */
-function EmployeesManager({ db, dispatch }){
-  const [editing, setEditing] = useState(null); // employee or {}
-  const [q, setQ] = useState("");
-  const [dept, setDept] = useState("");
-  const leads = db.employees.filter(e => e.role === "TeamLead");
-  const depts = [...new Set(db.employees.map(e=>e.department).filter(Boolean))];
-
-  const filtered = db.employees.filter(e =>
-    (!q || (e.name+e.empId+e.email).toLowerCase().includes(q.toLowerCase())) &&
-    (!dept || e.department===dept)
-  );
-
-  const save = (data) => {
-    if (data.id) dispatch("updateEmployee", data, { employeeName:"Admin", action:"Employee updated", detail:data.name });
-    else dispatch("addEmployee", data, { employeeName:"Admin", action:"Employee added", detail:data.name });
-    setEditing(null);
-  };
-  const del = (e) => { if (confirm(`Delete ${e.name}? Their break records remain in reports.`)){ dispatch("deleteEmployee", {id:e.id}, {employeeName:"Admin", action:"Employee deleted", detail:e.name}); } };
-  const toggle = (e) => dispatch("updateEmployee", {id:e.id, status: e.status==="Active"?"Inactive":"Active"}, {employeeName:"Admin", action:"Employee "+(e.status==="Active"?"deactivated":"activated"), detail:e.name});
-
-  const leadName = (id) => (leads.find(l=>l.empId===id)||{}).name || "—";
-  const rows = filtered.map(e => [
-    <span className="font-mono text-xs">{e.empId}</span>,
-    <span className="font-medium text-slate-800 dark:text-slate-100">{e.name}</span>,
-    e.department,
-    e.designation,
-    e.role==="Admin"?<Badge color="indigo">Admin</Badge>:e.role==="TeamLead"?<Badge color="indigo">Team Lead</Badge>:<Badge>Employee</Badge>,
-    e.role==="Employee"?leadName(e.teamLead):"—",
-    e.status==="Active"?<Badge color="green">Active</Badge>:<Badge color="slate">Inactive</Badge>,
-    <div className="flex gap-1">
-      <Btn size="sm" variant="ghost" onClick={()=>setEditing(e)}>Edit</Btn>
-      <Btn size="sm" variant="ghost" onClick={()=>toggle(e)}>{e.status==="Active"?"Off":"On"}</Btn>
-      <Btn size="sm" variant="ghost" className="text-rose-600" onClick={()=>del(e)}>Del</Btn>
-    </div>,
-  ]);
-
-  return (
-    <Card className="p-4">
-      <SectionTitle right={
-        <div className="flex items-center gap-2">
-          <ExportMenu title="Employees" columns={["Employee ID","Name","Department","Designation","Role","Team Lead","Email","Phone","Status"]}
-            rows={db.employees.map(e=>[e.empId,e.name,e.department,e.designation,e.role,leadName(e.teamLead),e.email,e.phone,e.status])} filename="employees" />
-          <Btn size="sm" onClick={()=>setEditing({ role:"Employee", status:"Active" })}>+ Add employee</Btn>
+        <div className="grid" style={{gridTemplateColumns:"1fr 1fr",alignContent:"start"}}>
+          <Stat label="Total break time today" value={fmtDuration(m.totalMin)} icon={I.hourglass()} tone="busy" sub={active?"Includes current break":"All breaks today"}/>
+          <Stat label="Breaks today" value={m.total} icon={I.coffee()} sub={m.activeCount?m.activeCount+" active now":"Completed"}/>
+          <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()} sub="Per completed break"/>
+          <Stat label="Longest today" value={m.total?fmtDuration(m.longest):"—"} icon={I.flame()} sub="Single break"/>
         </div>
-      }>Employees</SectionTitle>
-      <div className="flex flex-wrap gap-2 mb-3">
-        <TextInput placeholder="Search name / ID / email" value={q} onChange={e=>setQ(e.target.value)} className="max-w-xs" />
-        <Select value={dept} onChange={e=>setDept(e.target.value)} className="max-w-[180px]"><option value="">All departments</option>{depts.map(d=><option key={d}>{d}</option>)}</Select>
       </div>
-      <DataTable columns={["ID","Name","Dept","Designation","Role","Team Lead","Status",""]} rows={rows} />
-      <EmployeeForm employee={editing} leads={leads} depts={depts} onSave={save} onClose={()=>setEditing(null)} />
-    </Card>
+
+      <div className="sec-head"><div><div className="eyebrow">Log</div><h2 className="h2">Today's breaks</h2></div></div>
+      <div className="panel">
+        {today.length===0?<Empty icon={I.coffee({width:30,height:30})} title="No breaks yet today" hint="Start one above whenever you step away."/>:(
+          <div className="table-wrap"><table className="tbl">
+            <thead><tr><th>Break Type</th><th>Start</th><th>End</th><th>Duration</th><th>Status</th></tr></thead>
+            <tbody>{today.slice().sort((a,b)=>new Date(b.startTime)-new Date(a.startTime)).map(b=>(
+              <tr key={b.id}>
+                <td className="cell-strong">{b.breakType}</td>
+                <td className="nums">{fmtTime(b.startTime)}</td>
+                <td className="nums">{b.status==="active"?<span className="faint">—</span>:fmtTime(b.endTime)}</td>
+                <td className="nums cell-strong">{b.status==="active"?<LiveDuration start={b.startTime} now={now}/>:fmtDuration(b.durationMin)}</td>
+                <td><StatusBadge b={{...b,_limit:limit}} now={now}/></td>
+              </tr>))}
+            </tbody>
+          </table></div>
+        )}
+      </div>
+    </div>
   );
 }
-function EmployeeForm({ employee, leads, depts, onSave, onClose }){
-  const [f, setF] = useState({});
-  useEffect(()=>{ setF(employee ? {...employee} : null); }, [employee]);
-  if (!f) return null;
-  const set = (k,v) => setF(p=>({...p,[k]:v}));
-  const valid = f.name && f.empId && f.pin;
+
+/* ---------- employee: my history ---------- */
+function MyHistory({state,user,now}){
+  const [filter,setFilter]=useState("weekly");
+  const [cs,setCs]=useState(todayStr()); const [ce,setCe]=useState(todayStr());
+  const [search,setSearch]=useState("");
+  const [view,setView]=useState(null);
+  const [start,end]=rangeFor(filter,cs,ce);
+  const rows=useMemo(()=>{
+    let r=state.breaks.filter(b=>b.employeeId===user.id&&inRange(b,start,end));
+    if(search.trim()){ const q=search.toLowerCase(); r=r.filter(b=>(b.breakType+" "+(b.notes||"")).toLowerCase().includes(q)); }
+    return r.sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
+  },[state.breaks,user.id,start,end,search]);
+  const m=computeMetrics(rows,now);
   return (
-    <Modal open={!!employee} onClose={onClose} title={f.id?"Edit employee":"Add employee"} wide>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Full name"><TextInput value={f.name||""} onChange={e=>set("name",e.target.value)} /></Field>
-        <Field label="Employee ID"><TextInput value={f.empId||""} onChange={e=>set("empId",e.target.value)} placeholder="EMP-106" /></Field>
-        <Field label="Department"><TextInput list="depts" value={f.department||""} onChange={e=>set("department",e.target.value)} /><datalist id="depts">{depts.map(d=><option key={d} value={d} />)}</datalist></Field>
-        <Field label="Designation"><TextInput value={f.designation||""} onChange={e=>set("designation",e.target.value)} /></Field>
-        <Field label="Role"><Select value={f.role||"Employee"} onChange={e=>set("role",e.target.value)}><option value="Employee">Employee</option><option value="TeamLead">Team Lead</option><option value="Admin">Admin</option></Select></Field>
-        <Field label="Team Lead" hint="for employees only">
-          <Select value={f.teamLead||""} onChange={e=>set("teamLead",e.target.value)} disabled={f.role!=="Employee"}>
-            <option value="">—</option>{leads.map(l=><option key={l.empId} value={l.empId}>{l.name}</option>)}
-          </Select>
-        </Field>
-        <Field label="Email"><TextInput type="email" value={f.email||""} onChange={e=>set("email",e.target.value)} /></Field>
-        <Field label="Phone"><TextInput value={f.phone||""} onChange={e=>set("phone",e.target.value)} /></Field>
-        <Field label="Login PIN" hint="used with Employee ID to sign in"><TextInput value={f.pin||""} onChange={e=>set("pin",e.target.value)} /></Field>
-        <Field label="Status"><Select value={f.status||"Active"} onChange={e=>set("status",e.target.value)}><option>Active</option><option>Inactive</option></Select></Field>
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">History</div><h2 className="h2">My break history</h2></div></div>
+      <FilterBar filter={filter} setFilter={setFilter} cs={cs} setCs={setCs} ce={ce} setCe={setCe} search={search} setSearch={setSearch}>
+        <ExportButtons getRows={()=>rows} filenameBase={"my-breaks-"+user.name.toLowerCase().replace(/\s+/g,"-")} reportOpts={{title:"Break History — "+user.name,subtitle:"Ecommerce · "+fmtDateShort(start)+" – "+fmtDateShort(end)}}/>
+      </FilterBar>
+      <div className="stats" style={{marginBottom:16}}>
+        <Stat label="Total breaks" value={m.total} icon={I.coffee()}/>
+        <Stat label="Total break time" value={fmtDuration(m.totalMin)} icon={I.hourglass()} tone="busy"/>
+        <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()}/>
+        <Stat label="Longest break" value={m.total?fmtDuration(m.longest):"—"} icon={I.flame()} tone="alert"/>
       </div>
-      <div className="flex justify-end gap-2 mt-5">
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn disabled={!valid} onClick={()=>onSave(f)}>{f.id?"Save changes":"Add employee"}</Btn>
+      <div className="panel"><BreaksTable rows={rows} isAdmin={false} onView={setView} now={now} limit={state.settings.longBreakLimitMin}/></div>
+      {view&&<ViewBreakModal b={view} onClose={()=>setView(null)}/>}
+    </div>
+  );
+}
+
+/* ---------- admin: dashboard ---------- */
+const RANGE_LABEL={today:"Today",yesterday:"Yesterday",weekly:"Last 7 days",monthly:"Last 30 days",custom:"Custom range"};
+function LiveBoard({active,now,limit,onView,onEnd}){
+  if(!active.length) return <Empty icon={I.check({width:30,height:30})} title="Everyone's available" hint="No one is on a break right now."/>;
+  return (
+    <div className="live">
+      {active.map(b=>{ const mins=(now-new Date(b.startTime))/60000; const over=mins>limit;
+        return (
+          <div className={"live-row"+(over?" over":"")} key={b.id}>
+            <span className="av">{initials(b.employeeName)}</span>
+            <div className="live-main">
+              <div className="live-name"><span className={"dot "+(over?"dot-alert pulse-alert":"dot-busy pulse")}/>{b.employeeName}</div>
+              <div className="live-meta">{b.breakType} · since {fmtTime(b.startTime)}{over?" · over limit":""}</div>
+            </div>
+            <div className="live-time"><div className={"timer"+(over?" over":"")}>{fmtTimer(now-new Date(b.startTime))}</div><div className="since">{over?"Long break":"elapsed"}</div></div>
+            <div className="row-flex" style={{gap:6}}>
+              <button className="icon-btn" title="View" onClick={()=>onView(b)}>{I.eye()}</button>
+              <button className="btn sm subtle" title="End this break" onClick={()=>onEnd(b)}>End</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function AdminDashboard({state,ops,now}){
+  const [filter,setFilter]=useState("today");
+  const [cs,setCs]=useState(todayStr()); const [ce,setCe]=useState(todayStr());
+  const [empId,setEmpId]=useState("all"); const [typeName,setTypeName]=useState("all");
+  const [view,setView]=useState(null);
+  const limit=state.settings.longBreakLimitMin;
+  const cmap=useMemo(()=>typeColorMap(state.breakTypes),[state.breakTypes]);
+  const [start,end]=rangeFor(filter,cs,ce);
+  const workforce=state.employees.filter(e=>e.role==="employee");
+
+  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
+  const m=computeMetrics(ranged,now);
+  const liveActive=useMemo(()=>state.breaks.filter(b=>b.status==="active").sort((a,b)=>new Date(a.startTime)-new Date(b.startTime)),[state.breaks]);
+  const onBreakIds=new Set(liveActive.map(b=>b.employeeId));
+  const onBreak=workforce.filter(e=>onBreakIds.has(e.id)).length;
+  const available=Math.max(0,workforce.length-onBreak);
+
+  const dist=useMemo(()=>groupBy(ranged,b=>b.breakType).map((g,i)=>({label:g.label,value:g.count,minutes:g.minutes,color:colorFor(cmap,g.label,i)})),[ranged,cmap]);
+  const trend=useMemo(()=>trendByDay(ranged,start,end),[ranged,start,end]);
+  const byEmp=useMemo(()=>groupBy(ranged,b=>b.employeeName).slice(0,8).map(g=>({label:g.label.split(" ")[0],value:g.count})),[ranged]);
+  const mostUsed=dist[0]?dist[0].label:"—";
+
+  const events=useMemo(()=>{
+    const ev=[];
+    state.breaks.forEach(b=>{ ev.push({t:b.startTime,kind:"start",name:b.employeeName,type:b.breakType});
+      if(b.status==="completed"&&b.endTime) ev.push({t:b.endTime,kind:"end",name:b.employeeName,type:b.breakType,dur:b.durationMin}); });
+    return ev.sort((a,b)=>new Date(b.t)-new Date(a.t)).slice(0,9);
+  },[state.breaks]);
+
+  const endBreak=(b)=>{ const endISO=nowISO(); const dur=Math.round(minutesBetween(b.startTime,endISO)); ops.op("endBreak",[b.id,endISO,dur],{action:"endBreak",id:b.id,endTime:endISO,durationMin:dur}); };
+
+  const lbl=RANGE_LABEL[filter];
+  return (
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Live overview</div><h2 className="h2">Department dashboard</h2></div>
+        <div className="row-flex">{onBreak>0?<Badge kind="busy"><span className="dot dot-busy"/> {onBreak} on break now</Badge>:<Badge kind="free"><span className="dot dot-free"/> All available</Badge>}</div>
       </div>
+
+      <FilterBar filter={filter} setFilter={setFilter} cs={cs} setCs={setCs} ce={ce} setCe={setCe}
+        employees={workforce} empId={empId} setEmpId={setEmpId} types={state.breakTypes} typeName={typeName} setTypeName={setTypeName}/>
+
+      <div className="stats">
+        <Stat label="Total employees" value={workforce.length} icon={I.users()} sub="In Ecommerce"/>
+        <Stat label="Currently on break" value={onBreak} icon={I.coffee()} tone="busy" sub={onBreak?"Live":"—"}/>
+        <Stat label="Available" value={available} icon={I.check()} tone="free" sub="On the floor"/>
+        <Stat label={"Total breaks · "+lbl} value={m.total} icon={I.activity()} sub={m.activeCount?m.activeCount+" still active":"All breaks"}/>
+        <Stat label={"Total break time · "+lbl} value={fmtDuration(m.totalMin)} icon={I.hourglass()} tone="busy"/>
+        <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()} sub="Per completed break"/>
+        <Stat label="Longest break" value={m.total?fmtDuration(m.longest):"—"} icon={I.flame()} tone="alert"/>
+        <Stat label="Most used type" value={mostUsed} icon={I.tag()} sub={dist[0]?dist[0].value+" breaks":"—"}/>
+      </div>
+
+      <div className="grid dash-2" style={{marginTop:22}}>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.activity()} Live break status</span>{onBreak>0&&<Badge kind="busy">{onBreak} active</Badge>}</div>
+          <LiveBoard active={liveActive} now={now} limit={limit} onView={setView} onEnd={endBreak}/>
+        </div>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.pie()} Break type distribution</span><span className="faint" style={{fontSize:12}}>{lbl}</span></div>
+          <div className="panel-body"><Donut data={dist} centerLabel={m.total} centerSub="breaks"/></div>
+        </div>
+      </div>
+
+      <div className="grid g-2" style={{marginTop:14}}>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.activity()} Break trend</span><span className="faint" style={{fontSize:12}}>{lbl}</span></div>
+          <div className="panel-body"><Bars data={trend.map(d=>({label:d.label,value:d.count}))}/></div>
+        </div>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.users()} Breaks by employee</span><span className="faint" style={{fontSize:12}}>{lbl}</span></div>
+          <div className="panel-body"><Bars data={byEmp} alt/></div>
+        </div>
+      </div>
+
+      <div className="panel" style={{marginTop:14}}>
+        <div className="panel-head"><span className="panel-title">{I.clock()} Recent activity</span></div>
+        {events.length===0?<Empty icon={I.activity({width:30,height:30})} title="No activity yet" hint="Break starts and ends will appear here."/>:(
+          <div className="feed">{events.map((e,i)=>(
+            <div className="feed-row" key={i}>
+              <span className={"feed-ic "+e.kind}>{e.kind==="start"?I.play({width:13,height:13}):I.check({width:15,height:15})}</span>
+              <div className="feed-txt"><span className="feed-name">{e.name}</span> {e.kind==="start"?"started":"ended"} <b>{e.type}</b>{e.kind==="end"?" · "+fmtDuration(e.dur):""}</div>
+              <span className="feed-time">{fmtTime(e.t)} · {fmtDateShort(e.t)}</span>
+            </div>
+          ))}</div>
+        )}
+      </div>
+
+      {view&&<ViewBreakModal b={view} onClose={()=>setView(null)}/>}
+    </div>
+  );
+}
+/* ---------- admin: break types + team + settings ---------- */
+function BreakTypeModal({bt,onClose,onSave}){
+  const editing=!!bt;
+  const [name,setName]=useState(bt?bt.name:"");
+  const [description,setDescription]=useState(bt?(bt.description||""):"");
+  const [status,setStatus]=useState(bt?bt.status:"Active");
+  const [err,setErr]=useState("");
+  const save=()=>{
+    if(!name.trim()){setErr("Break type name is required.");return;}
+    onSave({ id:bt?bt.id:uid("bt"), name:name.trim(), description:description.trim(), status });
+    onClose();
+  };
+  return (
+    <Modal title={editing?"Edit break type":"New break type"} onClose={onClose}
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>{editing?"Save changes":"Add break type"}</button></>}>
+      {err&&<div className="banner warn">{err}</div>}
+      <div className="field"><label className="label">Break type name</label>
+        <input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Lunch Break" autoFocus/></div>
+      <div className="field" style={{marginTop:12}}><label className="label">Description <span className="faint">(optional)</span></label>
+        <textarea className="textarea" value={description} onChange={e=>setDescription(e.target.value)} placeholder="Short description" style={{minHeight:60}}/></div>
+      <div className="field" style={{marginTop:12}}><label className="label">Status</label>
+        <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
+          <option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
     </Modal>
   );
 }
 
-/* ----- Break Types Manager (incl. limits) ----- */
-function BreakTypesManager({ db, dispatch }){
-  const [editing, setEditing] = useState(null);
-  const save = (data) => {
-    if (data.id) dispatch("updateBreakType", data, {employeeName:"Admin", action:"Break type updated", detail:data.name});
-    else dispatch("addBreakType", data, {employeeName:"Admin", action:"Break type added", detail:data.name});
-    setEditing(null);
+function EmployeeModal({emp,onClose,onSave}){
+  const editing=!!emp;
+  const [name,setName]=useState(emp?emp.name:"");
+  const [role,setRole]=useState(emp?emp.role:"employee");
+  const [password,setPassword]=useState(emp?(emp.password||""):"");
+  const [err,setErr]=useState("");
+  const save=()=>{
+    if(!name.trim()){setErr("Name is required.");return;}
+    if(role==="admin"&&!password.trim()){setErr("Set a password for this admin.");return;}
+    onSave({ id:emp?emp.id:uid("emp"), name:name.trim(), role, password:password.trim() });
+    onClose();
   };
-  const del = (b) => { if(confirm(`Delete break type "${b.name}"?`)) dispatch("deleteBreakType", {id:b.id}, {employeeName:"Admin", action:"Break type deleted", detail:b.name}); };
   return (
-    <Card className="p-4">
-      <SectionTitle right={<Btn size="sm" onClick={()=>setEditing({ active:true, color:"#6366F1", maxMinutes:15 })}>+ Add break type</Btn>}>Break types & limits</SectionTitle>
-      <p className="text-xs text-slate-400 mb-3">Set the maximum allowed minutes per break type. Anyone exceeding the limit is flagged red across dashboards and reports.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {db.breakTypes.map(b => (
-          <div key={b.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2"><span className="dot" style={{background:b.color, width:12, height:12}}></span><span className="font-medium text-slate-800 dark:text-slate-100">{b.name}</span></div>
-              {b.active ? <Badge color="green">active</Badge> : <Badge>off</Badge>}
-            </div>
-            <div className="mt-2 text-sm text-slate-500">Limit: <span className="font-semibold text-slate-700 dark:text-slate-200 font-mono">{b.maxMinutes}m</span></div>
-            <div className="flex gap-1 mt-3">
-              <Btn size="sm" variant="ghost" onClick={()=>setEditing(b)}>Edit</Btn>
-              <Btn size="sm" variant="ghost" onClick={()=>save({id:b.id, active:!b.active})}>{b.active?"Disable":"Enable"}</Btn>
-              <Btn size="sm" variant="ghost" className="text-rose-600" onClick={()=>del(b)}>Delete</Btn>
-            </div>
-          </div>
-        ))}
-      </div>
-      <BreakTypeForm bt={editing} onSave={save} onClose={()=>setEditing(null)} />
-    </Card>
-  );
-}
-function BreakTypeForm({ bt, onSave, onClose }){
-  const [f, setF] = useState(null);
-  useEffect(()=>{ setF(bt ? {...bt} : null); }, [bt]);
-  if (!f) return null;
-  const set = (k,v)=>setF(p=>({...p,[k]:v}));
-  return (
-    <Modal open={!!bt} onClose={onClose} title={f.id?"Edit break type":"Add break type"}>
-      <div className="space-y-4">
-        <Field label="Name"><TextInput value={f.name||""} onChange={e=>set("name",e.target.value)} /></Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Max minutes"><TextInput type="number" min="1" value={f.maxMinutes||0} onChange={e=>set("maxMinutes", parseInt(e.target.value)||0)} /></Field>
-          <Field label="Color"><input type="color" value={f.color||"#6366F1"} onChange={e=>set("color",e.target.value)} className="w-full h-[38px] rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#0B1220]" /></Field>
-        </div>
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!f.active} onChange={e=>set("active",e.target.checked)} /> Active</label>
-        <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={onClose}>Cancel</Btn><Btn disabled={!f.name} onClick={()=>onSave(f)}>Save</Btn></div>
-      </div>
+    <Modal title={editing?"Edit team member":"Add team member"} onClose={onClose}
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>{editing?"Save":"Add member"}</button></>}>
+      {err&&<div className="banner warn">{err}</div>}
+      <div className="field"><label className="label">Full name</label>
+        <input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Ayesha Malik" autoFocus/></div>
+      <div className="field" style={{marginTop:12}}><label className="label">Role</label>
+        <select className="select" value={role} onChange={e=>setRole(e.target.value)}>
+          <option value="employee">Employee</option><option value="admin">Admin</option></select>
+        <span className="faint" style={{fontSize:12}}>Admins open the dashboard; employees record their own breaks.</span></div>
+      <div className="field" style={{marginTop:12}}><label className="label">{role==="admin"?"Admin password":"Password"} {role!=="admin"&&<span className="faint">(optional)</span>}</label>
+        <input className="input" type="text" value={password} onChange={e=>setPassword(e.target.value)} placeholder={role==="admin"?"Set this admin's password":"Set a login password (optional)"}/>
+        <span className="faint" style={{fontSize:12}}>{role==="admin"?"This admin signs in on the Admin tab with this password; the shared passcode in Settings also works.":"The employee enters this at login. Leave blank for name-only sign-in."}</span></div>
     </Modal>
   );
 }
 
-/* ----- Audit log ----- */
-function AuditView({ db, dispatch }){
-  const rows = db.audit.map(l => [
-    <span className="text-xs text-slate-400 font-mono">{new Date(l.timestamp).toLocaleString()}</span>,
-    <span className="font-medium text-slate-700 dark:text-slate-200">{l.employeeName}</span>,
-    l.action,
-    <span className="text-slate-500">{l.detail}</span>,
-  ]);
+function ManageView({state,ops,notify}){
+  const [editType,setEditType]=useState(null);
+  const [newType,setNewType]=useState(false);
+  const [delType,setDelType]=useState(null);
+  const usageCount=(n)=>state.breaks.filter(b=>b.breakType===n).length;
+  const saveType=(bt)=>{ ops.op("saveBreakType",[bt],{action:"saveBreakType",breakType:bt}); notify("Break type saved — "+bt.name,"info"); };
+  const removeType=(bt)=>{ ops.op("deleteBreakType",[bt.id],{action:"deleteBreakType",id:bt.id}); notify("Break type deleted","info"); };
+  const types=state.breakTypes;
   return (
-    <Card className="p-4">
-      <SectionTitle right={<ExportMenu title="Audit Log" columns={["Timestamp","Employee","Action","Detail"]} rows={db.audit.map(l=>[new Date(l.timestamp).toLocaleString(),l.employeeName,l.action,l.detail])} filename="audit-log" />}>Audit log</SectionTitle>
-      <DataTable columns={["Time","Employee","Action","Detail"]} rows={rows} empty="No activity yet." />
-    </Card>
-  );
-}
-
-/* ============================================================
-   TEAM LEAD VIEW
-   ============================================================ */
-function TeamLeadView({ db, user, theme, section }){
-  const dark = theme === "dark";
-  const now = Date.now();
-  const team = db.employees.filter(e => e.role==="Employee" && e.teamLead === user.empId);
-  const teamIds = new Set(team.map(e=>e.empId));
-  const teamRecords = db.records.filter(r => teamIds.has(r.employeeId));
-  const live = liveBreaks(teamRecords);
-  const exceeding = live.filter(r=>isExceeded(r,now));
-  const sToday = summarize(rangeRecords(teamRecords,"today"), now);
-  const activeTeam = team.filter(e=>e.status==="Active");
-
-  return (
-    <div className="space-y-6">
-      {section==="dashboard" && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <StatCard label="Team Members" value={activeTeam.length} accent="#6366F1" icon="👥" />
-            <StatCard label="On Break" value={live.length} accent="#F59E0B" icon="⏸" />
-            <StatCard label="Working" value={activeTeam.length-live.length} accent="#10B981" />
-            <StatCard label="Break Min Today" value={fmtMins(sToday.minutes)} accent="#22D3EE" icon="⏱" />
-            <StatCard label="Avg Break" value={fmtMins(sToday.avg)} accent="#A78BFA" />
-          </div>
-          {exceeding.length>0 && (
-            <Card className="p-4 border-rose-200 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/[.06]">
-              <div className="text-rose-700 dark:text-rose-300 font-semibold text-sm mb-2">🚩 {exceeding.length} on your team over limit</div>
-              <div className="flex flex-wrap gap-2">{exceeding.map(r=><Badge key={r.id} color="red">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></Badge>)}</div>
-            </Card>
-          )}
-          <Card className="p-4">
-            <SectionTitle right={<Badge color="amber"><span className="dot" style={{background:"#F59E0B"}}></span>{live.length} on break</Badge>}>Live team status</SectionTitle>
-            <LiveStatusTable employees={team.concat()} records={teamRecords} now={now} />
-          </Card>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-4"><SectionTitle>Team break trend (14d)</SectionTitle><ChartBox type="bar" dark={dark} data={trendData(teamRecords,"day",now)} /></Card>
-            <Card className="p-4"><SectionTitle>Team break type distribution</SectionTitle><ChartBox type="doughnut" dark={dark} data={typeDistData(teamRecords, db.breakTypes, now)} options={{cutout:"58%"}} /></Card>
-            <Card className="p-4 lg:col-span-2"><SectionTitle>Team member ranking by break time</SectionTitle><ChartBox type="bar" dark={dark} height={Math.max(220, team.length*36)} data={rankingData(teamRecords, now, 15)} options={{indexAxis:"y"}} /></Card>
-          </div>
-        </>
-      )}
-      {section==="reports" && <ReportsView db={db} scope="team" teamIds={teamIds} teamRecords={teamRecords} teamName={user.name} />}
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Configuration</div><h2 className="h2">Break types</h2></div>
+        <button className="btn primary" onClick={()=>setNewType(true)}>{I.plus()} Add break type</button></div>
+      <div className="panel">
+        {types.length===0?<Empty icon={I.tag({width:30,height:30})} title="No break types yet" hint="Add your first break type to get started."/>:(
+          <div>{types.map((t,i)=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 16px",borderTop:i?"1px solid var(--line-2)":"none"}}>
+              <span className="av" style={{background:t.status==="Active"?"#eef2ff":"#f1f5f9",color:t.status==="Active"?"#4338ca":"#94a3b8"}}>{I.tag({width:16,height:16})}</span>
+              <div className="bt-meta" style={{flex:1,minWidth:0}}>
+                <div className="cell-strong">{t.name}</div>
+                <div className="muted" style={{fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description||"No description"} · used {usageCount(t.name)}×</div>
+              </div>
+              {t.status==="Active"?<Badge kind="free">Active</Badge>:<Badge kind="off">Inactive</Badge>}
+              <div className="row-flex" style={{gap:6}}>
+                <button className="icon-btn" title="Edit" onClick={()=>setEditType(t)}>{I.edit()}</button>
+                <button className="icon-btn danger" title="Delete" onClick={()=>setDelType(t)}>{I.trash()}</button>
+              </div>
+            </div>
+          ))}</div>
+        )}
+      </div>
+      {(newType||editType)&&<BreakTypeModal bt={editType} onClose={()=>{setNewType(false);setEditType(null);}} onSave={saveType}/>}
+      {delType&&<ConfirmModal title="Delete break type" danger confirmLabel="Delete"
+        message={'Delete "'+delType.name+'"? '+(usageCount(delType.name)?usageCount(delType.name)+" past break(s) used it and will keep their label.":"It has no recorded breaks.")}
+        onClose={()=>setDelType(null)} onConfirm={()=>removeType(delType)}/>}
     </div>
   );
 }
 
-/* ============================================================
-   REPORTS
-   ============================================================ */
-function ReportsView({ db, scope, teamIds, teamRecords, teamName }){
-  const now = Date.now();
-  const [tab, setTab] = useState("daily");
-  const [emp, setEmp] = useState("");
-  const [dept, setDept] = useState("");
-  const [type, setType] = useState("");
-  const [date, setDate] = useState(todayStr());
-
-  let records = scope==="team" ? teamRecords : db.records;
-  const empOptions = scope==="team"
-    ? db.employees.filter(e=>teamIds.has(e.empId))
-    : db.employees.filter(e=>e.role!=="Admin");
-  const depts = [...new Set(empOptions.map(e=>e.department).filter(Boolean))];
-
-  // apply filters
-  let filtered = records.filter(r =>
-    (!emp || r.employeeId===emp) &&
-    (!dept || r.department===dept) &&
-    (!type || r.breakType===type)
-  );
-
-  const title = scope==="team" ? `Team Report — ${teamName}` : "Company Report";
-
+/* ---------- admin: team & settings ---------- */
+function TeamView({state,ops,notify}){
+  const [editEmp,setEditEmp]=useState(null);
+  const [newEmp,setNewEmp]=useState(false);
+  const [delEmp,setDelEmp]=useState(null);
+  const [limit,setLimit]=useState(String(state.settings.longBreakLimitMin));
+  const [passcode,setPasscode]=useState(state.settings.adminPasscode);
+  useEffect(()=>{ setLimit(String(state.settings.longBreakLimitMin)); setPasscode(state.settings.adminPasscode); },[state.settings.longBreakLimitMin,state.settings.adminPasscode]);
+  const saveEmp=(emp)=>{ ops.op("saveEmployee",[emp],{action:"saveEmployee",employee:emp}); notify("Team member saved — "+emp.name,"info"); };
+  const removeEmp=(emp)=>{ ops.op("deleteEmployee",[emp.id],{action:"deleteEmployee",id:emp.id}); notify("Team member removed","info"); };
+  const saveCfg=()=>{
+    const n=Math.max(1,parseInt(limit,10)||30);
+    const st={ longBreakLimitMin:n, adminPasscode:(passcode||"admin").trim()||"admin" };
+    ops.op("saveSettings",[st],{action:"saveSettings",settings:st});
+    notify("Settings updated","end","Long-break limit "+n+" min");
+  };
+  const team=state.employees;
+  const emps=team.filter(e=>e.role==="employee");
+  const admins=team.filter(e=>e.role==="admin");
+  const onBreak=new Set(state.breaks.filter(b=>b.status==="active").map(b=>b.employeeId));
   return (
-    <Card className="p-4">
-      <SectionTitle>{title}</SectionTitle>
-      {/* filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <Select value={emp} onChange={e=>setEmp(e.target.value)} className="max-w-[180px]"><option value="">All employees</option>{empOptions.map(e=><option key={e.empId} value={e.empId}>{e.name}</option>)}</Select>
-        <Select value={dept} onChange={e=>setDept(e.target.value)} className="max-w-[170px]"><option value="">All departments</option>{depts.map(d=><option key={d}>{d}</option>)}</Select>
-        <Select value={type} onChange={e=>setType(e.target.value)} className="max-w-[170px]"><option value="">All break types</option>{db.breakTypes.map(b=><option key={b.id} value={b.name}>{b.name}</option>)}</Select>
-        {tab==="daily" && <TextInput type="date" value={date} onChange={e=>setDate(e.target.value)} className="max-w-[170px]" />}
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Access</div><h2 className="h2">Team</h2></div>
+        <button className="btn primary" onClick={()=>setNewEmp(true)}>{I.plus()} Add employee</button></div>
+
+      <div className="stats" style={{marginBottom:16}}>
+        <Stat label="Total members" value={team.length} icon={I.users()}/>
+        <Stat label="Employees" value={emps.length} icon={I.user()} sub="Can record breaks"/>
+        <Stat label="Admins" value={admins.length} icon={I.shield()} sub="Dashboard access"/>
+        <Stat label="On break now" value={emps.filter(e=>onBreak.has(e.id)).length} icon={I.coffee()} tone="busy"/>
       </div>
-      {/* tabs */}
-      <div className="flex gap-1 mb-4 border-b border-slate-200 dark:border-white/10 overflow-x-auto">
-        {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["department","Department"],["employee","Per-employee"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${tab===k?"border-indigo-500 text-indigo-600 dark:text-indigo-300":"border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>{l}</button>
+
+      <div className="panel">
+        <div className="muted" style={{padding:"11px 16px",borderBottom:"1px solid var(--line-2)",fontSize:12.5}}>Everyone here appears in the login picker so they can record breaks. Removing someone keeps their past records in history.</div>
+        {team.map((e,i)=>(
+          <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderTop:i?"1px solid var(--line-2)":"none"}}>
+            <span className="av" style={{width:34,height:34}}>{initials(e.name)}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div className="cell-strong">{e.name}</div>
+              <div className="muted" style={{fontSize:12}}>{e.role==="admin"?"Administrator":"Employee"}{onBreak.has(e.id)?" · on break now":""}</div>
+            </div>
+            {e.role==="admin"?<Badge kind="accent">Admin</Badge>:<Badge kind="slate">Employee</Badge>}
+            <div className="row-flex" style={{gap:6}}>
+              <button className="icon-btn" title="Edit" onClick={()=>setEditEmp(e)}>{I.edit()}</button>
+              <button className="icon-btn danger" title="Remove" onClick={()=>setDelEmp(e)} disabled={team.length<=1}>{I.trash()}</button>
+            </div>
+          </div>
         ))}
       </div>
 
-      {tab==="daily" && <DailyReport records={filtered.filter(r=>r.date===date)} date={date} title={title} now={now} />}
-      {tab==="weekly" && <PeriodReport records={filtered} mode="week" title={title} now={now} />}
-      {tab==="monthly" && <PeriodReport records={filtered} mode="month" title={title} now={now} />}
-      {tab==="department" && <DepartmentReport records={filtered} db={db} title={title} now={now} />}
-      {tab==="employee" && <PerEmployeeReport records={filtered} employees={empOptions} db={db} title={title} now={now} />}
-    </Card>
-  );
-}
-
-function DailyReport({ records, date, title, now }){
-  // group by employee
-  const byEmp = {};
-  records.forEach(r => { (byEmp[r.employeeName] = byEmp[r.employeeName] || []).push(r); });
-  const rows = Object.entries(byEmp).map(([name, recs]) => {
-    const s = summarize(recs, now);
-    const types = [...new Set(recs.map(r=>r.breakType))].join(", ");
-    return [name, recs.length, fmtMins(s.minutes), types, fmtMins(s.longest)];
-  });
-  const exportRows = Object.entries(byEmp).map(([name, recs]) => {
-    const s = summarize(recs, now); return [name, recs.length, Math.round(s.minutes), [...new Set(recs.map(r=>r.breakType))].join(" | "), Math.round(s.longest)];
-  });
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-2">
-        <div className="text-sm text-slate-500">{fmtDay(date)} · {records.length} breaks</div>
-        <ExportMenu title={title+" — Daily"} subtitle={fmtDay(date)} columns={["Employee","Total Breaks","Total Minutes","Break Types","Longest (min)"]} rows={exportRows} filename={"daily-report-"+date} />
-      </div>
-      <DataTable columns={["Employee","Total Breaks","Total Minutes","Break Types Used","Longest"]} rows={rows} empty="No breaks on this day." />
-    </div>
-  );
-}
-
-function PeriodReport({ records, mode, title, now }){
-  // group by employee with per-period breakdown
-  const byEmp = {};
-  records.forEach(r => { (byEmp[r.employeeName] = byEmp[r.employeeName] || []).push(r); });
-  const rows = Object.entries(byEmp).map(([name, recs]) => {
-    const s = summarize(recs, now);
-    const days = new Set(recs.map(r=>r.date)).size || 1;
-    return [name, recs.length, fmtMins(s.minutes), fmtMins(s.avg), fmtMins(s.minutes / (mode==="week"?7:days))];
-  }).sort((a,b)=>0);
-  const exportRows = Object.entries(byEmp).map(([name, recs]) => {
-    const s = summarize(recs, now); const days = new Set(recs.map(r=>r.date)).size || 1;
-    return [name, recs.length, Math.round(s.minutes), Math.round(s.avg), Math.round(s.minutes/(mode==="week"?7:days))];
-  });
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-2">
-        <div className="text-sm text-slate-500">{mode==="week"?"Current week":"Current month"} · {records.length} breaks</div>
-        <ExportMenu title={title+" — "+(mode==="week"?"Weekly":"Monthly")} columns={["Employee","Break Count","Total Minutes","Avg / Break","Avg / Day"]} rows={exportRows} filename={mode+"-report-"+todayStr()} />
-      </div>
-      <DataTable columns={["Employee","Break Count","Total Minutes","Avg / Break","Avg / Day"]} rows={rows} empty="No breaks in this period." />
-    </div>
-  );
-}
-
-function DepartmentReport({ records, db, title, now }){
-  const byDept = {};
-  records.forEach(r => { (byDept[r.department||"—"] = byDept[r.department||"—"] || []).push(r); });
-  const rows = Object.entries(byDept).map(([d, recs]) => {
-    const s = summarize(recs, now);
-    const tc = {}; recs.forEach(r=>tc[r.breakType]=(tc[r.breakType]||0)+1);
-    const most = Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];
-    return [d, recs.length, fmtMins(s.minutes), fmtMins(s.avg), most?most[0]:"—"];
-  });
-  const exportRows = Object.entries(byDept).map(([d, recs]) => {
-    const s = summarize(recs, now); const tc={}; recs.forEach(r=>tc[r.breakType]=(tc[r.breakType]||0)+1);
-    const most=Object.entries(tc).sort((a,b)=>b[1]-a[1])[0];
-    return [d, recs.length, Math.round(s.minutes), Math.round(s.avg), most?most[0]:"—"];
-  });
-  return (
-    <div>
-      <div className="flex justify-end mb-2"><ExportMenu title={title+" — Department"} columns={["Department","Total Breaks","Total Minutes","Avg / Break","Most Used Type"]} rows={exportRows} filename={"department-report-"+todayStr()} /></div>
-      <DataTable columns={["Department","Total Breaks","Total Minutes","Avg / Break","Most Used Type"]} rows={rows} empty="No data." />
-    </div>
-  );
-}
-
-function PerEmployeeReport({ records, employees, db, title, now }){
-  const leadName = (id) => (db.employees.find(l=>l.empId===id)||{}).name || "—";
-  const data = employees.map(e => {
-    const recs = records.filter(r => r.employeeId === e.empId);
-    const s = summarize(recs, now);
-    const count = (name) => recs.filter(r=>r.breakType===name).length;
-    const other = recs.filter(r=>!["Tea Break","Lunch Break","Prayer (Namaz)","Phone Call"].includes(r.breakType)).length;
-    return { e, recs, s,
-      tea:count("Tea Break"), lunch:count("Lunch Break"), namaz:count("Prayer (Namaz)"), phone:count("Phone Call"), other,
-    };
-  }).filter(d => d.recs.length > 0);
-
-  const rows = data.map(d => [
-    <span className="font-medium text-slate-800 dark:text-slate-100">{d.e.name}</span>,
-    d.e.department, leadName(d.e.teamLead),
-    d.recs.length, fmtMins(d.s.minutes),
-    d.tea, d.lunch, d.namaz, d.phone, d.other,
-    fmtMins(d.s.avg), fmtMins(d.s.longest), fmtMins(d.s.shortest),
-  ]);
-  const exportRows = data.map(d => [
-    d.e.name, d.e.department, leadName(d.e.teamLead), d.recs.length, Math.round(d.s.minutes),
-    d.tea, d.lunch, d.namaz, d.phone, d.other, Math.round(d.s.avg), Math.round(d.s.longest), Math.round(d.s.shortest),
-  ]);
-  const cols = ["Employee","Dept","Team Lead","Breaks","Total Min","Tea","Lunch","Namaz","Phone","Other","Avg","Longest","Shortest"];
-  return (
-    <div>
-      <div className="flex justify-end mb-2"><ExportMenu title={title+" — Per Employee"} columns={cols} rows={exportRows} filename={"employee-report-"+todayStr()} /></div>
-      <DataTable columns={cols} rows={rows} empty="No data." />
-    </div>
-  );
-}
-
-/* ============================================================
-   NOTIFICATIONS (bell)
-   ============================================================ */
-function NotificationsBell({ db, scopeRecords }){
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const now = Date.now();
-  useEffect(() => { const h=e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); }; document.addEventListener("mousedown",h); return ()=>document.removeEventListener("mousedown",h); }, []);
-  const recs = scopeRecords || db.records;
-  const live = liveBreaks(recs);
-  const exceeding = live.filter(r=>isExceeded(r,now));
-  // recent events: last 8 starts/ends today
-  const events = recs.filter(r=>r.date===todayStr())
-    .flatMap(r => [{ t:new Date(r.startTime).getTime(), txt:`${r.employeeName} started ${r.breakType}`, kind:"start" }]
-      .concat(r.endTime ? [{ t:new Date(r.endTime).getTime(), txt:`${r.employeeName} returned from ${r.breakType}`, kind:"end" }] : []))
-    .sort((a,b)=>b.t-a.t).slice(0,8);
-  const badge = exceeding.length;
-  return (
-    <div className="relative" ref={ref}>
-      <button onClick={()=>setOpen(o=>!o)} className="relative w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-300">
-        🔔{badge>0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">{badge}</span>}
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-72 z-30 bg-white dark:bg-[#111A2E] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-white/10 text-sm font-semibold text-slate-700 dark:text-slate-200">Notifications</div>
-          <div className="max-h-80 overflow-y-auto text-sm">
-            {exceeding.map(r => (
-              <div key={r.id} className="px-3 py-2 bg-rose-50 dark:bg-rose-500/10 border-b border-slate-100 dark:border-white/5">
-                <div className="text-rose-700 dark:text-rose-300 font-medium">🚩 Over limit</div>
-                <div className="text-slate-600 dark:text-slate-300 text-xs">{r.employeeName} · {r.breakType} · <LiveTimer startTime={r.startTime} maxMinutes={r.maxMinutes} /></div>
-              </div>
-            ))}
-            {events.length===0 && exceeding.length===0 && <div className="px-3 py-6 text-center text-slate-400 text-xs">No activity today.</div>}
-            {events.map((e,i)=>(
-              <div key={i} className="px-3 py-2 border-b border-slate-100 dark:border-white/5 flex items-start gap-2">
-                <span className="dot mt-1.5" style={{background:e.kind==="start"?"#F59E0B":"#10B981"}}></span>
-                <div><div className="text-slate-700 dark:text-slate-200 text-xs">{e.txt}</div><div className="text-[10px] text-slate-400">{new Date(e.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div></div>
-              </div>
-            ))}
-          </div>
+      <div className="sec-head" style={{marginTop:26}}><div><div className="eyebrow">Rules</div><h2 className="h2">Settings</h2></div></div>
+      <div className="panel panel-pad" style={{maxWidth:560}}>
+        <div className="form-grid">
+          <div className="field"><label className="label">Long break alert (minutes)</label>
+            <input className="input" type="number" min="1" value={limit} onChange={e=>setLimit(e.target.value)}/>
+            <span className="faint" style={{fontSize:12}}>Breaks longer than this raise a long-break alert.</span></div>
+          <div className="field"><label className="label">Admin passcode</label>
+            <input className="input" value={passcode} onChange={e=>setPasscode(e.target.value)} placeholder="admin"/>
+            <span className="faint" style={{fontSize:12}}>Used on the Admin login.</span></div>
         </div>
-      )}
+        <button className="btn primary" style={{marginTop:16}} onClick={saveCfg}>Save settings</button>
+      </div>
+
+      {(newEmp||editEmp)&&<EmployeeModal emp={editEmp} onClose={()=>{setNewEmp(false);setEditEmp(null);}} onSave={saveEmp}/>}
+      {delEmp&&<ConfirmModal title="Remove team member" danger confirmLabel="Remove"
+        message={'Remove "'+delEmp.name+'" from the team? Their past break records stay in history.'}
+        onClose={()=>setDelEmp(null)} onConfirm={()=>removeEmp(delEmp)}/>}
     </div>
   );
 }
 
-/* ============================================================
-   APP SHELL + ROOT
-   ============================================================ */
-const NAV = {
-  Admin: [["dashboard","Dashboard"],["live","Live"],["employees","Employees"],["breaktypes","Break Types"],["reports","Reports"],["audit","Audit Log"]],
-  TeamLead: [["dashboard","Dashboard"],["reports","Reports"]],
-  Employee: [],
-};
+/* ---------- admin: break history ---------- */
+function AdminHistory({state,ops,now}){
+  const [filter,setFilter]=useState("today");
+  const [cs,setCs]=useState(todayStr()); const [ce,setCe]=useState(todayStr());
+  const [empId,setEmpId]=useState("all"); const [typeName,setTypeName]=useState("all");
+  const [search,setSearch]=useState("");
+  const [view,setView]=useState(null); const [edit,setEdit]=useState(null); const [del,setDel]=useState(null);
+  const limit=state.settings.longBreakLimitMin;
+  const workforce=state.employees.filter(e=>e.role==="employee");
+  const [start,end]=rangeFor(filter,cs,ce);
+  const rows=useMemo(()=>{
+    let r=state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName));
+    if(search.trim()){ const q=search.toLowerCase(); r=r.filter(b=>(b.employeeName+" "+b.breakType+" "+(b.notes||"")).toLowerCase().includes(q)); }
+    return r.sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
+  },[state.breaks,start,end,empId,typeName,search]);
+  const m=computeMetrics(rows,now);
+  const onSave=(rec)=>ops.op("updateBreak",[rec],{action:"updateBreak",record:rec});
+  const onDelete=(b)=>ops.op("deleteBreak",[b.id],{action:"deleteBreak",id:b.id});
+  return (
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Records</div><h2 className="h2">Break history</h2></div>
+        <span className="faint" style={{fontSize:13}}>{rows.length} record{rows.length===1?"":"s"} · {RANGE_LABEL[filter]}</span></div>
+      <FilterBar filter={filter} setFilter={setFilter} cs={cs} setCs={setCs} ce={ce} setCe={setCe}
+        employees={workforce} empId={empId} setEmpId={setEmpId} types={state.breakTypes} typeName={typeName} setTypeName={setTypeName} search={search} setSearch={setSearch}>
+        <ExportButtons getRows={()=>rows} filenameBase="ecommerce-break-history" reportOpts={{title:"Break History — Ecommerce",subtitle:RANGE_LABEL[filter]+" · "+fmtDateShort(start)+" – "+fmtDateShort(end)}}/>
+      </FilterBar>
+      <div className="stats" style={{marginBottom:16}}>
+        <Stat label="Total breaks" value={m.total} icon={I.coffee()} sub={m.activeCount?m.activeCount+" active":"All"}/>
+        <Stat label="Total break time" value={fmtDuration(m.totalMin)} icon={I.hourglass()} tone="busy"/>
+        <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()}/>
+        <Stat label="Longest break" value={m.total?fmtDuration(m.longest):"—"} icon={I.flame()} tone="alert"/>
+      </div>
+      <div className="panel"><BreaksTable rows={rows} isAdmin onView={setView} onEdit={setEdit} onDelete={setDel} now={now} limit={limit}/></div>
+      {view&&<ViewBreakModal b={view} onClose={()=>setView(null)}/>}
+      {edit&&<EditBreakModal b={edit} breakTypes={state.breakTypes} onClose={()=>setEdit(null)} onSave={onSave}/>}
+      {del&&<ConfirmModal title="Delete break record" danger confirmLabel="Delete"
+        message={"Delete "+del.employeeName+"'s "+del.breakType+" from "+fmtDateShort(del.startTime)+"? This can't be undone."}
+        onClose={()=>setDel(null)} onConfirm={()=>onDelete(del)}/>}
+    </div>
+  );
+}
+
+/* ---------- admin: reports & analytics ---------- */
+function AdminReports({state,now}){
+  const [filter,setFilter]=useState("weekly");
+  const [cs,setCs]=useState(todayStr()); const [ce,setCe]=useState(todayStr());
+  const [empId,setEmpId]=useState("all"); const [typeName,setTypeName]=useState("all");
+  const cmap=useMemo(()=>typeColorMap(state.breakTypes),[state.breakTypes]);
+  const workforce=state.employees.filter(e=>e.role==="employee");
+  const [start,end]=rangeFor(filter,cs,ce);
+  const ranged=useMemo(()=>state.breaks.filter(b=>inRange(b,start,end)&&(empId==="all"||b.employeeId===empId)&&(typeName==="all"||b.breakType===typeName)),[state.breaks,start,end,empId,typeName]);
+  const m=computeMetrics(ranged,now);
+  const byType=useMemo(()=>groupBy(ranged,b=>b.breakType),[ranged]);
+  const byEmp=useMemo(()=>groupBy(ranged,b=>b.employeeName),[ranged]);
+  const trend=useMemo(()=>trendByDay(ranged,start,end),[ranged,start,end]);
+  const dist=byType.map((g,i)=>({label:g.label,value:g.count,minutes:g.minutes,color:colorFor(cmap,g.label,i)}));
+  const empBars=byEmp.slice(0,10).map(g=>({label:g.label.split(" ")[0],value:g.count}));
+  const avgByType=byType.slice(0,10).map(g=>({label:g.label,value:g.count?Math.round(g.minutes/g.count):0}));
+  const mostUsed=byType[0]?byType[0].label:"—";
+  const lbl=RANGE_LABEL[filter];
+  const summary=[
+    "Period: "+lbl+" ("+fmtDateShort(start)+" - "+fmtDateShort(end)+")",
+    "Total breaks: "+m.total+"   |   Total break time: "+fmtDuration(m.totalMin),
+    "Average duration: "+(m.completedCount?fmtDuration(m.avgMin):"-")+"   |   Most used type: "+mostUsed,
+    "Employees with breaks: "+byEmp.length+"   |   Break types used: "+byType.length
+  ];
+  return (
+    <div className="wrap">
+      <div className="sec-head"><div><div className="eyebrow">Analytics</div><h2 className="h2">Reports</h2></div></div>
+      <FilterBar filter={filter} setFilter={setFilter} cs={cs} setCs={setCs} ce={ce} setCe={setCe}
+        employees={workforce} empId={empId} setEmpId={setEmpId} types={state.breakTypes} typeName={typeName} setTypeName={setTypeName}>
+        <ExportButtons getRows={()=>ranged} filenameBase="ecommerce-break-report" reportOpts={{title:"Break Report — Ecommerce",subtitle:lbl+" · generated "+fmtDateFull(new Date()),summary}}/>
+      </FilterBar>
+
+      <div className="stats">
+        <Stat label="Total breaks" value={m.total} icon={I.activity()} sub={lbl}/>
+        <Stat label="Total break time" value={fmtDuration(m.totalMin)} icon={I.hourglass()} tone="busy"/>
+        <Stat label="Average duration" value={m.completedCount?fmtDuration(m.avgMin):"—"} icon={I.clock()} sub="Per completed break"/>
+        <Stat label="Most used type" value={mostUsed} icon={I.tag()} sub={byType[0]?byType[0].count+" breaks":"—"}/>
+      </div>
+
+      <div className="grid dash-2" style={{marginTop:22}}>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.activity()} Break trend</span><span className="faint" style={{fontSize:12}}>{lbl}</span></div>
+          <div className="panel-body"><Bars data={trend.map(d=>({label:d.label,value:d.count}))}/></div>
+        </div>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.pie()} Type distribution</span></div>
+          <div className="panel-body"><Donut data={dist} centerLabel={m.total} centerSub="breaks"/></div>
+        </div>
+      </div>
+
+      <div className="grid g-2" style={{marginTop:14}}>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.users()} Breaks per employee</span></div>
+          <div className="panel-body"><Bars data={empBars}/></div>
+        </div>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.clock()} Avg duration by type</span></div>
+          <div className="panel-body"><Bars data={avgByType} alt valueFmt={fmtDuration}/></div>
+        </div>
+      </div>
+
+      <div className="grid g-2" style={{marginTop:14,alignItems:"start"}}>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.users()} Break frequency per employee</span></div>
+          {byEmp.length===0?<Empty icon={I.users({width:28,height:28})} title="No data" hint="No breaks in this range."/>:(
+            <div className="table-wrap"><table className="tbl">
+              <thead><tr><th>Employee</th><th style={{textAlign:"right"}}>Breaks</th><th style={{textAlign:"right"}}>Total time</th><th style={{textAlign:"right"}}>Avg</th></tr></thead>
+              <tbody>{byEmp.map(g=>(
+                <tr key={g.label}>
+                  <td><div className="row-flex" style={{gap:9}}><span className="av" style={{width:28,height:28,fontSize:11}}>{initials(g.label)}</span><span className="cell-strong">{g.label}</span></div></td>
+                  <td className="nums" style={{textAlign:"right"}}>{g.count}</td>
+                  <td className="nums" style={{textAlign:"right"}}>{fmtDuration(g.minutes)}</td>
+                  <td className="nums" style={{textAlign:"right"}}>{g.count?fmtDuration(Math.round(g.minutes/g.count)):"—"}</td>
+                </tr>))}
+              </tbody></table></div>
+          )}
+        </div>
+        <div className="panel">
+          <div className="panel-head"><span className="panel-title">{I.tag()} Breaks by type</span></div>
+          {byType.length===0?<Empty icon={I.tag({width:28,height:28})} title="No data" hint="No breaks in this range."/>:(
+            <div className="table-wrap"><table className="tbl">
+              <thead><tr><th>Break type</th><th style={{textAlign:"right"}}>Count</th><th style={{textAlign:"right"}}>Total time</th><th style={{textAlign:"right"}}>Share</th></tr></thead>
+              <tbody>{byType.map((g,i)=>(
+                <tr key={g.label}>
+                  <td><div className="row-flex" style={{gap:9}}><span className="swatch" style={{background:colorFor(cmap,g.label,i)}}/><span className="cell-strong">{g.label}</span></div></td>
+                  <td className="nums" style={{textAlign:"right"}}>{g.count}</td>
+                  <td className="nums" style={{textAlign:"right"}}>{fmtDuration(g.minutes)}</td>
+                  <td className="nums" style={{textAlign:"right"}}>{m.total?Math.round(g.count/m.total*100):0}%</td>
+                </tr>))}
+              </tbody></table></div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+/* ---------- toasts ---------- */
+function Toasts({items,dismiss}){
+  if(!items.length) return null;
+  const ic={start:I.play({width:13,height:13}),end:I.check({width:14,height:14}),alert:I.bell(),info:I.bell()};
+  return (
+    <div className="toasts">
+      {items.map(t=>(
+        <div className={"toast "+(t.type||"info")} key={t.id} onClick={()=>dismiss(t.id)} role="status">
+          <span className="toast-ic">{ic[t.type]||ic.info}</span>
+          <div><div className="toast-t">{t.title}</div>{t.desc&&<div className="toast-d">{t.desc}</div>}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- live clock ---------- */
+function fmtClock(d){ const x=new Date(d); let h=x.getHours(); const ap=h>=12?"PM":"AM"; h=h%12||12; return pad(h)+":"+pad(x.getMinutes())+":"+pad(x.getSeconds())+" "+ap; }
+
+/* ---------- root app ---------- */
+const EMP_TABS=[["mybreak","My Break"],["myhistory","My History"]];
+const ADMIN_TABS=[["dash","Dashboard"],["team","Team"],["types","Break Types"],["history","Break History"],["reports","Reports"]];
+const USER_KEY="bmt_user";
 
 function App(){
-  const [db, setDb] = useState(null);
-  const [user, setUser] = useState(null);
-  const [theme, setTheme] = useState(() => safeStore.get("break_theme") || "light");
-  const [section, setSection] = useState("dashboard");
-  const [, tick] = useState(0);
-  const [syncErr, setSyncErr] = useState(false);
-  const [syncMsg, setSyncMsg] = useState("");
-  const [sheetEmpty, setSheetEmpty] = useState(false);
-  const failSync = (e) => { setSyncErr(true); setSyncMsg(e && e.message ? e.message : ""); };
-  const okSync = () => { setSyncErr(false); setSyncMsg(""); };
-  const [loading, setLoading] = useState(true);
-  const dbRef = useRef(null);     // always-current db for deterministic writes
-  const busyRef = useRef(false);  // pause poll while a write is in flight
-  const setDbBoth = (d) => { dbRef.current = d; setDb(d); };
+  const { state, error, op } = useAppState();
+  const ops = { op };
+  const [user,setUser]=useState(()=>{ try{ const r=localStorage.getItem(USER_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } });
+  const [tab,setTab]=useState(null);
+  const [now,setNow]=useState(Date.now());
+  const [toasts,setToasts]=useState([]);
+  const alerted=useRef(new Set());
 
-  // theme
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme==="dark");
-    safeStore.set("break_theme", theme);
-  }, [theme]);
+  useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(t); },[]);
+  useEffect(()=>{ try{ if(user) localStorage.setItem(USER_KEY,JSON.stringify(user)); else localStorage.removeItem(USER_KEY); }catch(e){} },[user]);
+  useEffect(()=>{ if(user&&!tab) setTab(user.role==="admin"?"dash":"mybreak"); },[user,tab]);
 
-  // initial load
-  const loadDb = useCallback(async () => {
-    if (isCloud()){
-      try {
-        let data = await Cloud.load();
-        const notSeeded = !data || !Array.isArray(data.employees) || data.employees.length === 0;
-        if (notSeeded){                   // empty store / sheet → seed so login works
-          const seeded = seedDb();
-          if (MODE !== "apps_script") { await Cloud.save(seeded); }
-          else { setSheetEmpty(true); }   // Sheets: prompt user to run setup() to persist
-          data = seeded;
-        } else { setSheetEmpty(false); }
-        setDbBoth(data); okSync(); setLoading(false); return;
-      } catch(e){ failSync(e); }     // fall back to local copy on failure
-    }
-    const raw = safeStore.get(STORE_KEY);
-    if (raw){ try { setDbBoth(JSON.parse(raw)); setLoading(false); return; } catch(e){} }
-    const seeded = seedDb();
-    setDbBoth(seeded); safeStore.set(STORE_KEY, JSON.stringify(seeded)); setLoading(false);
-  }, []);
+  const pushToast=useCallback((title,type,desc)=>{
+    const id=uid("t");
+    setToasts(list=>[...list,{id,title,type:type||"info",desc}]);
+    setTimeout(()=>setToasts(list=>list.filter(t=>t.id!==id)),4600);
+  },[]);
+  const dismiss=useCallback((id)=>setToasts(list=>list.filter(t=>t.id!==id)),[]);
 
-  useEffect(() => { loadDb(); }, [loadDb]);
-
-  // 1s tick for live durations across the app
-  useEffect(() => { const t = setInterval(()=>tick(x=>x+1), 1000); return ()=>clearInterval(t); }, []);
-
-  // background poll (cloud modes) every REFRESH_MS
-  useEffect(() => {
-    if (!isCloud()) return;
-    const t = setInterval(async () => {
-      if (busyRef.current) return;       // don't clobber an in-flight local write
-      try { const data = await Cloud.load(); if (data){ setDbBoth(data); okSync(); } }
-      catch(e){ failSync(e); }
-    }, REFRESH_MS);
-    return () => clearInterval(t);
-  }, []);
-
-  const dispatch = useCallback(async (action, payload, audit) => {
-    const base = dbRef.current;
-    if (!base) return;
-    let next = applyAction(base, action, payload);
-    if (audit && MODE !== "apps_script") next = applyAction(next, "addAudit", audit);
-    setDbBoth(next);                       // optimistic local update
-    if (!isCloud()){ safeStore.set(STORE_KEY, JSON.stringify(next)); return; }
-    busyRef.current = true;
-    try {
-      if (MODE === "apps_script"){
-        await appsPost(action, payload);
-        if (audit) await appsPost("addAudit", audit);
-        const data = await appsGet(); setDbBoth(data);
-      } else {
-        await Cloud.save(next);            // blob stores: push whole db
+  // long-break alert — fires once per active break that crosses the limit
+  useEffect(()=>{
+    if(!state) return;
+    const limit=state.settings.longBreakLimitMin;
+    state.breaks.forEach(b=>{
+      if(b.status==="active"){
+        const mins=(now-new Date(b.startTime))/60000;
+        if(mins>limit&&!alerted.current.has(b.id)){
+          alerted.current.add(b.id);
+          pushToast("Long break alert — "+b.employeeName,"alert",b.breakType+" passed the "+limit+"-minute limit");
+        }
       }
-      okSync();
-    } catch(e){ failSync(e); }
-    finally { busyRef.current = false; }
-  }, []);
+    });
+  },[now,state,pushToast]);
 
-  const logout = () => { setUser(null); setSection("dashboard"); };
-  const toggleTheme = () => setTheme(t => t==="dark"?"light":"dark");
+  const logout=()=>{ setUser(null); setTab(null); };
 
-  if (loading || !db) return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading…</div>;
-  if (!user) return <LoginScreen db={db} onLogin={(u)=>{ setUser(u); setSection("dashboard"); }} theme={theme} toggleTheme={toggleTheme} />;
+  if(!state) return <div className="login"><div className="boot">Loading Break Board…</div></div>;
 
-  const nav = NAV[user.role] || [];
-  // keep section valid
-  const validSections = nav.map(n=>n[0]);
-  const curSection = user.role==="Employee" ? "me" : (validSections.includes(section) ? section : (validSections[0]||"dashboard"));
-
-  // team records for lead notifications
-  let scopeRecords = db.records;
-  if (user.role==="TeamLead"){
-    const teamIds = new Set(db.employees.filter(e=>e.role==="Employee"&&e.teamLead===user.empId).map(e=>e.empId));
-    scopeRecords = db.records.filter(r=>teamIds.has(r.employeeId));
-  } else if (user.role==="Employee"){
-    scopeRecords = db.records.filter(r=>r.employeeId===user.empId);
+  const stillValid = !user || user.role==="admin" || state.employees.some(e=>e.id===user.id);
+  if(!user || !stillValid){
+    return <><Login state={state} onLogin={u=>{setUser(u);setTab(u.role==="admin"?"dash":"mybreak");}} onAddEmployee={(emp)=>op("saveEmployee",[emp],{action:"saveEmployee",employee:emp})}/><Toasts items={toasts} dismiss={dismiss}/></>;
   }
 
-  const roleLabel = { Admin:"Administrator", TeamLead:"Team Lead", Employee:"Employee" }[user.role];
+  const isAdmin=user.role==="admin";
+  const tabs=isAdmin?ADMIN_TABS:EMP_TABS;
+  const cur=tab||(isAdmin?"dash":"mybreak");
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* top bar */}
-      <header className="sticky top-0 z-40 bg-[#0B1220] text-white border-b border-white/10 no-print">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-display font-bold">⏱</div>
-            <div className="font-display font-semibold tracking-tight">Break Manager</div>
-            {MODE==="local" && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">session mode</span>}
-            {isCloud() && !syncErr && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">{MODE_LABEL} · live</span>}
-            {syncErr && <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30">sync error</span>}
+    <>
+      <header className="topbar">
+        <div className="topbar-in">
+          <div className="brand">
+            <span className="brand-badge">{I.coffee({width:18,height:18,stroke:"#fff"})}</span>
+            <div><div className="brand-name">Break Board</div><div className="brand-sub">Ecommerce Department</div></div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <NotificationsBell db={db} scopeRecords={scopeRecords} />
-            <button onClick={toggleTheme} className="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-300">{theme==="dark"?"☀":"🌙"}</button>
-            <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-white/10">
-              <div className="text-right leading-tight">
-                <div className="text-sm font-medium">{user.name}</div>
-                <div className="text-[11px] text-slate-400">{roleLabel} · {user.empId}</div>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center text-sm font-semibold">{user.name[0]}</div>
+          <div className="top-right">
+            <div className="top-clock"><span className="lp"/>{fmtClock(now)}</div>
+            <div className="top-user">
+              <span className="uav">{initials(user.name)}</span>
+              <div><div className="user-name">{user.name}</div><div className="user-role">{user.role}</div></div>
             </div>
-            <Btn variant="ghost" size="sm" className="text-slate-300 hover:text-white" onClick={logout}>Sign out</Btn>
+            <button className="btn sm subtle" onClick={logout}>{I.logout()} Sign out</button>
           </div>
         </div>
-        {/* section tabs */}
-        {nav.length>0 && (
-          <div className="max-w-7xl mx-auto px-2 flex gap-0.5 overflow-x-auto">
-            {nav.map(([k,l])=>(
-              <button key={k} onClick={()=>setSection(k)} className={`px-3.5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition ${curSection===k?"border-indigo-400 text-white":"border-transparent text-slate-400 hover:text-slate-200"}`}>{l}</button>
-            ))}
-          </div>
-        )}
       </header>
+      <div className="tabwrap"><div className="tabs">
+        {tabs.map(([k,l])=>(<button key={k} className={"tab"+(cur===k?" active":"")} onClick={()=>setTab(k)}>{l}</button>))}
+      </div></div>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-        {syncErr && <div className="mb-4 text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-lg px-3 py-2">Couldn't reach the {MODE_LABEL} store — showing the last data fetched.{syncMsg ? " " + syncMsg : " Check your credentials / deployment in the config block."}</div>}
-        {sheetEmpty && !syncErr && <div className="mb-4 text-sm bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 rounded-lg px-3 py-2">Connected to Google Sheets, but the sheet is empty. Run <span className="font-mono font-semibold">setup</span> once in Apps Script (Run ▸ setup) to create the tabs and seed data. You're viewing seed data locally until then.</div>}
-        {user.role==="Employee" && <EmployeeView db={db} user={user} dispatch={dispatch} theme={theme} />}
-        {user.role==="Admin" && <AdminView db={db} dispatch={dispatch} theme={theme} section={curSection} setSection={setSection} />}
-        {user.role==="TeamLead" && <TeamLeadView db={db} user={user} theme={theme} section={curSection} />}
-      </main>
+      {cur==="mybreak"&&<MyBreak state={state} user={user} ops={ops} now={now} notify={pushToast}/>}
+      {cur==="myhistory"&&<MyHistory state={state} user={user} now={now}/>}
+      {cur==="dash"&&<AdminDashboard state={state} ops={ops} now={now}/>}
+      {cur==="team"&&<TeamView state={state} ops={ops} notify={pushToast}/>}
+      {cur==="types"&&<ManageView state={state} ops={ops} notify={pushToast}/>}
+      {cur==="history"&&<AdminHistory state={state} ops={ops} now={now}/>}
+      {cur==="reports"&&<AdminReports state={state} now={now}/>}
 
-      <footer className="no-print text-center text-[11px] text-slate-400 py-4">
-        Break Management & Reporting · {db.employees.length} employees · auto-refresh {Math.round(REFRESH_MS/1000)}s
-        {user.role==="Admin" && <button onClick={()=>{ if(confirm("Reset to demo data? This clears local records.")){ dispatch("resetDemo",{}); } }} className="ml-2 underline hover:text-slate-600">reset demo</button>}
-      </footer>
-    </div>
+      {error&&<div style={{position:"fixed",bottom:14,left:14,zIndex:80,maxWidth:340}}><div className="banner warn">{error}</div></div>}
+      <Toasts items={toasts} dismiss={dismiss}/>
+    </>
   );
 }
 
-/* normalize backend payload to expected shape */
-function normalizeDb(data){
-  return {
-    employees: data.employees || [],
-    breakTypes: data.breakTypes || [],
-    records: data.records || [],
-    audit: data.audit || [],
-    settings: data.settings || { refreshMs: REFRESH_MS },
-  };
+try {
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(<App/>);
+} catch (e) {
+  document.getElementById("root").innerHTML = '<div style="max-width:560px;margin:80px auto;font-family:system-ui;padding:24px;border:1px solid #eee;border-radius:12px"><h2 style="margin:0 0 8px">Something went wrong</h2><p style="color:#666">The Break Board failed to start. Please refresh the page.</p><pre style="white-space:pre-wrap;color:#b91c1c;font-size:12px">'+(e&&e.message?e.message:e)+'</pre></div>';
 }
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
-
-<!--
-================================================================================
- STORAGE SETUP — pick ONE provider, set STORAGE_MODE at the top, fill its keys.
- All four work from this single static file on Vercel (no server needed,
- except Apps Script which is hosted free by Google).
-================================================================================
-
-OPTION 1 — GOOGLE SHEETS  (STORAGE_MODE = "apps_script")
-  1. New Google Sheet → Extensions → Apps Script.
-  2. Paste the contents of break-management-Code.gs, Save.
-  3. Run setup()  (authorize when asked). It builds the tabs + seed data.
-  4. Deploy → New deployment → Web app → Execute as: Me,
-     Who has access: Anyone → Deploy → copy the /exec URL.
-  5. Paste it into APPS_SCRIPT_URL above.
-
-OPTION 2 — SUPABASE  (STORAGE_MODE = "supabase")   [recommended]
-  1. supabase.com → New project.
-  2. SQL Editor → run:
-        create table app_state ( id text primary key, data jsonb );
-        alter table app_state enable row level security;
-        create policy "anon all" on app_state
-          for all to anon using (true) with check (true);
-  3. Project Settings → API → copy the Project URL and the anon public key.
-  4. Paste into SUPABASE_URL and SUPABASE_ANON_KEY above.
-  (The "anon all" policy lets anyone with the key read/write — fine for an
-   internal tool. Tighten later with Supabase Auth if needed.)
-
-OPTION 3 — FIREBASE  (STORAGE_MODE = "firebase")
-  1. console.firebase.google.com → Add project.
-  2. Build → Firestore Database → Create database (Start in test mode).
-  3. Project settings → General → Your apps → Web (</>) → register →
-     copy the firebaseConfig values.
-  4. Paste apiKey / authDomain / projectId / appId into FIREBASE_CONFIG above.
-  (Test mode allows open read/write for 30 days. For longer use, set a rule
-   like:  match /break_mgmt/{id} { allow read, write: if true; }  )
-
-OPTION 4 — JSONBIN  (STORAGE_MODE = "jsonbin")
-  1. jsonbin.io → sign up → API Keys → copy the Master Key.
-  2. Create a new Bin with body  {}  → copy its Bin ID from the URL.
-  3. Paste into JSONBIN_BIN_ID and JSONBIN_KEY above.
-  (The Master Key is visible in page source on a static site. Use an
-   Access Key with read+update scope instead if that matters to you.)
-
-DEPLOY (any option): push index.html to GitHub → import the repo in Vercel →
-deploy. Vercel serves index.html at the root automatically.
-================================================================================
--->
