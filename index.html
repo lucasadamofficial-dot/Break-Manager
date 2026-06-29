@@ -338,6 +338,7 @@ const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyOEMM7ZOcw-DLI8Rt6
 const LS_KEY = "bmt_ecom_v1";
 const DEPARTMENT = "Ecommerce";
 const RED_LIMIT = 12; // a single break over this many minutes is flagged red
+const ADMIN_PASSWORD = "00225588"; // the only admin password
 
 /* ---------- defaults / seed ---------- */
 const uid = (p) => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -353,7 +354,7 @@ const DEFAULT_EMPLOYEES = [
   ["Bilal Ahmed","employee"],["Hira Yousaf","employee"],["Usman Tariq","employee"]
 ].map(([name,role]) => ({ id: uid("emp"), name, role }));
 
-const DEFAULT_SETTINGS = { longBreakLimitMin: RED_LIMIT, adminPasscode: "admin" };
+const DEFAULT_SETTINGS = { longBreakLimitMin: RED_LIMIT, adminPasscode: ADMIN_PASSWORD };
 
 function seedState(){
   return { employees: DEFAULT_EMPLOYEES, breakTypes: DEFAULT_BREAK_TYPES, breaks: [], settings: { ...DEFAULT_SETTINGS } };
@@ -774,28 +775,23 @@ function ConfirmModal({title,message,confirmLabel,danger,onClose,onConfirm}){
 }
 
 /* ---------- login ---------- */
-function Login({state,onLogin,onAddEmployee}){
+function Login({state,onLogin}){
   const [mode,setMode]=useState("employee");
   const employees=state.employees.filter(e=>e.role==="employee");
   const [empId,setEmpId]=useState(employees[0]?employees[0].id:"");
   const [empPass,setEmpPass]=useState("");
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
-  const [adding,setAdding]=useState(employees.length===0);
-  const [newName,setNewName]=useState("");
-  const [newPass,setNewPass]=useState("");
   const selEmp=state.employees.find(x=>x.id===empId);
   const enterEmployee=()=>{
     const e=selEmp; if(!e){setErr("Pick your name to continue.");return;}
     if(e.password&&empPass!==e.password){setErr("Incorrect password.");return;}
     onLogin(e);
   };
-  const enterAdmin=()=>{ const byPass=state.employees.find(e=>e.role==="admin"&&e.password&&e.password===pass); if(byPass){ onLogin(byPass); return; } if(pass===state.settings.adminPasscode){ const admin=state.employees.find(e=>e.role==="admin")||{id:"admin",name:"Admin",role:"admin"}; onLogin(admin); return; } setErr("Incorrect password."); };
-  const addSelf=()=>{
-    const name=newName.trim(); if(!name){setErr("Enter your name to continue.");return;}
-    const emp={ id:uid("emp"), name, role:"employee", password:newPass.trim() };
-    if(onAddEmployee) onAddEmployee(emp);
-    onLogin(emp);
+  const enterAdmin=()=>{
+    if(pass!==ADMIN_PASSWORD){setErr("Incorrect password.");return;}
+    const admin=state.employees.find(e=>e.role==="admin")||{id:"admin",name:"Admin",role:"admin"};
+    onLogin(admin);
   };
   return (
     <div className="login">
@@ -812,17 +808,8 @@ function Login({state,onLogin,onAddEmployee}){
           </div>
           {err&&<div className="banner warn">{err}</div>}
           {mode==="employee"?(
-            adding?(
-              <>
-                <div className="field"><label className="label">Your full name</label>
-                  <input className="input" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Ayesha Malik" autoFocus/>
-                </div>
-                <div className="field" style={{marginTop:12}}><label className="label">Password <span className="faint">(optional)</span></label>
-                  <input className="input" type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSelf()} placeholder="Set a login password"/>
-                </div>
-                <button className="btn primary lg block" style={{marginTop:14}} onClick={addSelf}>{I.plus()} Add me & continue</button>
-                {employees.length>0&&<button className="btn ghost block" style={{marginTop:8}} onClick={()=>{setAdding(false);setErr("");}}>Back to the list</button>}
-              </>
+            employees.length===0?(
+              <div className="muted" style={{padding:"10px 2px",fontSize:13.5,lineHeight:1.5}}>No employees have been added yet. Ask an admin to add you from the Team page, then sign in here.</div>
             ):(
               <>
                 <div className="field"><label className="label">Who's starting a shift?</label>
@@ -836,7 +823,6 @@ function Login({state,onLogin,onAddEmployee}){
                   </div>
                 )}
                 <button className="btn primary lg block" style={{marginTop:14}} onClick={enterEmployee} disabled={!empId}>Continue</button>
-                <button className="btn ghost block" style={{marginTop:8}} onClick={()=>{setAdding(true);setNewName("");setNewPass("");setErr("");}}>{I.plus()} New here? Add yourself</button>
               </>
             )
           ):(
@@ -845,7 +831,6 @@ function Login({state,onLogin,onAddEmployee}){
                 <input className="input" type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enterAdmin()} placeholder="Enter password" autoFocus/>
               </div>
               <button className="btn primary lg block" onClick={enterAdmin}>Open dashboard</button>
-              <div className="hint">Default passcode is <b>admin</b> — change it in Settings after signing in.</div>
             </>
           )}
         </div>
@@ -1165,8 +1150,7 @@ function EmployeeModal({emp,onClose,onSave}){
   const [err,setErr]=useState("");
   const save=()=>{
     if(!name.trim()){setErr("Name is required.");return;}
-    if(role==="admin"&&!password.trim()){setErr("Set a password for this admin.");return;}
-    onSave({ id:emp?emp.id:uid("emp"), name:name.trim(), role, password:password.trim() });
+    onSave({ id:emp?emp.id:uid("emp"), name:name.trim(), role, password:role==="admin"?"":password.trim() });
     onClose();
   };
   return (
@@ -1178,10 +1162,12 @@ function EmployeeModal({emp,onClose,onSave}){
       <div className="field" style={{marginTop:12}}><label className="label">Role</label>
         <select className="select" value={role} onChange={e=>setRole(e.target.value)}>
           <option value="employee">Employee</option><option value="admin">Admin</option></select>
-        <span className="faint" style={{fontSize:12}}>Admins open the dashboard; employees record their own breaks.</span></div>
-      <div className="field" style={{marginTop:12}}><label className="label">{role==="admin"?"Admin password":"Password"} {role!=="admin"&&<span className="faint">(optional)</span>}</label>
-        <input className="input" type="text" value={password} onChange={e=>setPassword(e.target.value)} placeholder={role==="admin"?"Set this admin's password":"Set a login password (optional)"}/>
-        <span className="faint" style={{fontSize:12}}>{role==="admin"?"This admin signs in on the Admin tab with this password; the shared passcode in Settings also works.":"The employee enters this at login. Leave blank for name-only sign-in."}</span></div>
+        <span className="faint" style={{fontSize:12}}>Admins open the dashboard with the shared admin password; employees record their own breaks.</span></div>
+      {role!=="admin"&&(
+        <div className="field" style={{marginTop:12}}><label className="label">Password <span className="faint">(optional)</span></label>
+          <input className="input" type="text" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Set a login password (optional)"/>
+          <span className="faint" style={{fontSize:12}}>The employee enters this at login. Leave blank for name-only sign-in.</span></div>
+      )}
     </Modal>
   );
 }
@@ -1229,15 +1215,8 @@ function TeamView({state,ops,notify}){
   const [editEmp,setEditEmp]=useState(null);
   const [newEmp,setNewEmp]=useState(false);
   const [delEmp,setDelEmp]=useState(null);
-  const [passcode,setPasscode]=useState(state.settings.adminPasscode);
-  useEffect(()=>{ setPasscode(state.settings.adminPasscode); },[state.settings.adminPasscode]);
   const saveEmp=(emp)=>{ ops.op("saveEmployee",[emp],{action:"saveEmployee",employee:emp}); notify("Team member saved — "+emp.name,"info"); };
   const removeEmp=(emp)=>{ ops.op("deleteEmployee",[emp.id],{action:"deleteEmployee",id:emp.id}); notify("Team member removed","info"); };
-  const saveCfg=()=>{
-    const st={ longBreakLimitMin:RED_LIMIT, adminPasscode:(passcode||"admin").trim()||"admin" };
-    ops.op("saveSettings",[st],{action:"saveSettings",settings:st});
-    notify("Settings saved","end");
-  };
   const team=state.employees;
   const emps=team.filter(e=>e.role==="employee");
   const admins=team.filter(e=>e.role==="admin");
@@ -1272,13 +1251,10 @@ function TeamView({state,ops,notify}){
         ))}
       </div>
 
-      <div className="sec-head" style={{marginTop:26}}><div><div className="eyebrow">Rules</div><h2 className="h2">Settings</h2></div></div>
+      <div className="sec-head" style={{marginTop:26}}><div><div className="eyebrow">Rules</div><h2 className="h2">Rules</h2></div></div>
       <div className="panel panel-pad" style={{maxWidth:560}}>
         <div className="rule-note">{I.flame({width:16,height:16})}<span>Any single break longer than <b>{RED_LIMIT} minutes</b> is automatically flagged <span className="red-word">red</span> everywhere in the app.</span></div>
-        <div className="field" style={{marginTop:14}}><label className="label">Admin passcode</label>
-          <input className="input" value={passcode} onChange={e=>setPasscode(e.target.value)} placeholder="admin"/>
-          <span className="faint" style={{fontSize:12}}>Shared key for the Admin login. Personal admin passwords are set per member above.</span></div>
-        <button className="btn primary" style={{marginTop:16}} onClick={saveCfg}>Save settings</button>
+        <div className="muted" style={{marginTop:12,fontSize:12.5,lineHeight:1.5}}>Only admins can add or remove team members. Admins sign in with the shared admin password.</div>
       </div>
 
       {(newEmp||editEmp)&&<EmployeeModal emp={editEmp} onClose={()=>{setNewEmp(false);setEditEmp(null);}} onSave={saveEmp}/>}
@@ -1531,7 +1507,7 @@ function App(){
 
   const stillValid = !user || user.role==="admin" || state.employees.some(e=>e.id===user.id);
   if(!user || !stillValid){
-    return <><Login state={state} onLogin={u=>{setUser(u);setTab(u.role==="admin"?"dash":"mybreak");}} onAddEmployee={(emp)=>op("saveEmployee",[emp],{action:"saveEmployee",employee:emp})}/><Toasts items={toasts} dismiss={dismiss}/></>;
+    return <><Login state={state} onLogin={u=>{setUser(u);setTab(u.role==="admin"?"dash":"mybreak");}}/><Toasts items={toasts} dismiss={dismiss}/></>;
   }
 
   const isAdmin=user.role==="admin";
@@ -1552,7 +1528,7 @@ function App(){
               <span className="uav">{initials(user.name)}</span>
               <div><div className="user-name">{user.name}</div><div className="user-role">{user.role}</div></div>
             </div>
-            <button className="btn sm subtle" onClick={()=>setShowPw(true)} title="Change password">{I.key()}</button>
+            {user.role==="employee"&&<button className="btn sm subtle" onClick={()=>setShowPw(true)} title="Change password">{I.key()}</button>}
             <button className="btn sm subtle" onClick={logout}>{I.logout()} Sign out</button>
           </div>
         </div>
